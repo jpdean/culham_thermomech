@@ -10,20 +10,19 @@ from dolfinx.io import XDMFFile
 import ufl
 
 
-def solve(mesh, k, t_end, num_time_steps, T_i_expression):
+def solve(mesh, k, t_end, num_time_steps, problem):
     V = fem.FunctionSpace(mesh, ("Lagrange", k))
 
     facet_dim = mesh.topology.dim - 1
     boundary_facets = locate_entities_boundary(
         mesh, facet_dim, lambda x: np.full(
             x.shape[1], True, dtype=bool))
+    T_d = fem.Function(V)
+    T_d.interpolate(problem.T)
     bc = fem.dirichletbc(
-        PETSc.ScalarType(0), fem.locate_dofs_topological(
-            V, facet_dim, boundary_facets),
-        V)
+        T_d, fem.locate_dofs_topological(V, facet_dim, boundary_facets))
 
     # Time step
-    t = 0
     delta_t = fem.Constant(mesh, PETSc.ScalarType(t_end / num_time_steps))
 
     xdmf_file = XDMFFile(MPI.COMM_WORLD, "T.xdmf", "w")
@@ -31,15 +30,17 @@ def solve(mesh, k, t_end, num_time_steps, T_i_expression):
 
     T_h = fem.Function(V)
     T_h.name = "T"
-    T_h.interpolate(T_i_expression)
-    xdmf_file.write_function(T_h, t)
+    T_h.interpolate(problem.T)
+    xdmf_file.write_function(T_h, problem.t)
 
     T_n = fem.Function(V)
     T_n.x.array[:] = T_h.x.array
 
     T = ufl.TrialFunction(V)
     v = ufl.TestFunction(V)
-    f = fem.Constant(mesh, PETSc.ScalarType(0))
+
+    f = fem.Function(V)
+    f.interpolate(problem.f)
 
     a = ufl.inner(T, v) * ufl.dx + \
         delta_t * ufl.inner(ufl.grad(T), ufl.grad(v)) * ufl.dx
@@ -57,7 +58,10 @@ def solve(mesh, k, t_end, num_time_steps, T_i_expression):
     solver.getPC().setType(PETSc.PC.Type.LU)
 
     for n in range(num_time_steps):
-        t += delta_t.value
+        problem.t += delta_t.value
+
+        T_d.interpolate(problem.T)
+        f.interpolate(problem.f)
 
         with b.localForm() as loc_b:
             loc_b.set(0)
@@ -73,17 +77,30 @@ def solve(mesh, k, t_end, num_time_steps, T_i_expression):
 
         T_n.x.array[:] = T_h.x.array
 
-        xdmf_file.write_function(T_h, t)
+        xdmf_file.write_function(T_h, problem.t)
 
     xdmf_file.close()
 
     return T_h
 
 
-t_end = 0.1
+class Problem():
+    def __init__(self):
+        self.t = 0
+
+    def T(self, x):
+        return np.sin(np.pi * x[0]) * np.cos(np.pi * x[1]) * \
+            np.sin(np.pi * self.t)
+
+    def f(self, x):
+        return np.pi * np.sin(x[0] * np.pi) * np.cos(x[1] * np.pi) * \
+               (2 * np.pi * np.sin(ufl.pi * self.t) + np.cos(np.pi * self.t))
+
+
+t_end = 2
 num_time_steps = 500
 n = 50
 k = 1
 mesh = create_unit_square(MPI.COMM_WORLD, n, n)
-solve(mesh, k, t_end, num_time_steps,
-      lambda x: np.exp(-50 * ((x[0] - 0.5)**2 + (x[1] - 0.5)**2)))
+problem = Problem()
+solve(mesh, k, t_end, num_time_steps, problem)

@@ -94,13 +94,4 @@ class Problem():
 
     def f(self, x):
         return np.pi * np.sin(x[0] * np.pi) * np.cos(x[1] * np.pi) * \
-               (2 * np.pi * np.sin(ufl.pi * self.t) + np.cos(np.pi * self.t))
-
-
-t_end = 2
-num_time_steps = 500
-n = 50
-k = 1
-mesh = create_unit_square(MPI.COMM_WORLD, n, n)
-problem = Problem()
-solve(mesh, k, t_end, num_time_steps, problem)
+            (2 * np.pi * np.sin(ufl.pi * self.t) + np.cos(np.pi * self.t))

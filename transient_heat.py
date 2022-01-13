@@ -111,7 +111,18 @@ class Problem():
 
     # Thermal conductivity
     def kappa(self, T):
-        return 4.1 + T**2
+        # Dummy data representing 4.1 + T**2
+        x = np.array([0.0, 0.25, 0.50, 0.75, 1.0])
+        y = np.array([4.1, 4.1625, 4.35, 4.6625, 5.1])
+
+        degree = 2
+        coeffs = np.polynomial.Polynomial.fit(x, y, degree).convert().coef
+
+        kappa = 0
+        for n in range(degree + 1):
+            kappa += coeffs[n] * T**n
+
+        return kappa
 
 
 def main():

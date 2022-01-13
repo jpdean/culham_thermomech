@@ -101,7 +101,8 @@ class Problem():
         rho = self.rho()
         kappa = self.kappa()
         return np.pi * np.sin(x[0] * np.pi) * np.cos(x[1] * np.pi) * \
-            (2 * np.pi * kappa * np.sin(ufl.pi * self.t) + rho * c * np.cos(np.pi * self.t))
+            (2 * np.pi * kappa * np.sin(ufl.pi * self.t) +
+             rho * c * np.cos(np.pi * self.t))
 
     # Specific heat capacity
     def c(self):

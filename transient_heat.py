@@ -115,3 +115,17 @@ class Problem():
     # Thermal conductivity
     def kappa(self):
         return 4.1
+
+
+def main():
+    t_end = 2
+    num_time_steps = 100
+    n = 32
+    k = 1
+    mesh = create_unit_square(MPI.COMM_WORLD, n, n)
+    problem = Problem()
+    solve(mesh, k, t_end, num_time_steps, problem)
+
+
+if __name__ == "__main__":
+    main()

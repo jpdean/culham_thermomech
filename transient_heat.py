@@ -88,7 +88,18 @@ class Problem():
 
     def f(self, x):
         # Dependence on material parameters has been explicitly computed
-        return np.pi * ((np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 * np.cos(x[1] * np.pi)**2 + 1.3) * (np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 * np.cos(x[1] * np.pi)**2 + 2.7) * np.cos(np.pi * self.t) + 2 * np.pi * (np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 * np.cos(x[1] * np.pi)**2 + 4.1) * np.sin(np.pi * self.t) - 2 * np.pi * np.sin(x[0] * np.pi)**2 * np.sin(x[1] * np.pi)**2 * np.sin(np.pi * self.t)**3 - 2 * np.pi * np.sin(np.pi * self.t)**3 * np.cos(x[0] * np.pi)**2 * np.cos(x[1] * np.pi)**2) * np.sin(x[0] * np.pi) * np.cos(x[1] * np.pi)
+        return np.pi * ((np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 *
+                         np.cos(x[1] * np.pi)**2 + 1.3) *
+                        (np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2
+                         * np.cos(x[1] * np.pi)**2 + 2.7) *
+                        np.cos(np.pi * self.t) + 2 * np.pi *
+                        (np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 *
+                        np.cos(x[1] * np.pi)**2 + 4.1) * np.sin(np.pi * self.t)
+                        - 2 * np.pi * np.sin(x[0] * np.pi)**2 * np.sin(x[1] *
+                        np.pi)**2 * np.sin(np.pi * self.t)**3 - 2 * np.pi *
+                        np.sin(np.pi * self.t)**3 * np.cos(x[0] * np.pi)**2 *
+                        np.cos(x[1] * np.pi)**2) * np.sin(x[0] * np.pi) * \
+            np.cos(x[1] * np.pi)
 
     # Specific heat capacity
     def c(self, T):

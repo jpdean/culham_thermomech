@@ -44,10 +44,10 @@ def solve(mesh, k, t_end, num_time_steps, problem):
 
     rho = fem.Constant(mesh, PETSc.ScalarType(problem.rho()))
     c = fem.Constant(mesh, PETSc.ScalarType(problem.c()))
-    kappa = fem.Constant(mesh, PETSc.ScalarType(problem.kappa()))
 
     F = ufl.inner(rho * c * T_h, v) * ufl.dx + \
-        delta_t * ufl.inner(kappa * ufl.grad(T_h), ufl.grad(v)) * ufl.dx - \
+        delta_t * ufl.inner(problem.kappa(T_h) *
+                            ufl.grad(T_h), ufl.grad(v)) * ufl.dx - \
         ufl.inner(rho * c * T_n + delta_t * f, v) * ufl.dx
 
     non_lin_problem = fem.NonlinearProblem(F, T_h, [bc])
@@ -90,10 +90,16 @@ class Problem():
     def f(self, x):
         c = self.c()
         rho = self.rho()
-        kappa = self.kappa()
-        return np.pi * np.sin(x[0] * np.pi) * np.cos(x[1] * np.pi) * \
-            (2 * np.pi * kappa * np.sin(ufl.pi * self.t) +
-             rho * c * np.cos(np.pi * self.t))
+        # Dependence on kappa has been explicitly calculated
+        return np.pi * (c * rho * np.cos(np.pi * self.t) + 2 * np.pi *
+                        (np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 *
+                         np.cos(x[1] * np.pi)**2 + 4.1) *
+                        np.sin(np.pi * self.t) - 2 * np.pi *
+                        np.sin(x[0] * np.pi)**2 * np.sin(x[1] * np.pi)**2 *
+                        np.sin(np.pi * self.t)**3 - 2 * np.pi *
+                        np.sin(np.pi * self.t)**3 * np.cos(x[0] * np.pi)**2 *
+                        np.cos(x[1] * np.pi)**2) * np.sin(x[0] * np.pi) * \
+            np.cos(x[1] * np.pi)
 
     # Specific heat capacity
     def c(self):
@@ -104,8 +110,8 @@ class Problem():
         return 2.7
 
     # Thermal conductivity
-    def kappa(self):
-        return 4.1
+    def kappa(self, T):
+        return 4.1 + T**2
 
 
 def main():

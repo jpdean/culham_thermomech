@@ -38,8 +38,8 @@ def test_temporal_convergence():
 
 def test_spatial_convergence():
     t_end = 1.5
-    num_time_steps = 1000
-    n = 16
+    num_time_steps = 2000
+    n = 8
     k = 1
     mesh = create_unit_square(MPI.COMM_WORLD, n, n)
     problem = transient_heat.Problem()

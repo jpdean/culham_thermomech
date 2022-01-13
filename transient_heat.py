@@ -42,12 +42,11 @@ def solve(mesh, k, t_end, num_time_steps, problem):
     f = fem.Function(V)
     f.interpolate(problem.f)
 
-    rho = fem.Constant(mesh, PETSc.ScalarType(problem.rho()))
-    c = fem.Constant(mesh, PETSc.ScalarType(problem.c()))
-
+    rho = problem.rho(T_h)
+    c = problem.c(T_h)
+    kappa = problem.kappa(T_h)
     F = ufl.inner(rho * c * T_h, v) * ufl.dx + \
-        delta_t * ufl.inner(problem.kappa(T_h) *
-                            ufl.grad(T_h), ufl.grad(v)) * ufl.dx - \
+        delta_t * ufl.inner(kappa * ufl.grad(T_h), ufl.grad(v)) * ufl.dx - \
         ufl.inner(rho * c * T_n + delta_t * f, v) * ufl.dx
 
     non_lin_problem = fem.NonlinearProblem(F, T_h, [bc])
@@ -88,26 +87,16 @@ class Problem():
             np.sin(np.pi * self.t)
 
     def f(self, x):
-        c = self.c()
-        rho = self.rho()
-        # Dependence on kappa has been explicitly calculated
-        return np.pi * (c * rho * np.cos(np.pi * self.t) + 2 * np.pi *
-                        (np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 *
-                         np.cos(x[1] * np.pi)**2 + 4.1) *
-                        np.sin(np.pi * self.t) - 2 * np.pi *
-                        np.sin(x[0] * np.pi)**2 * np.sin(x[1] * np.pi)**2 *
-                        np.sin(np.pi * self.t)**3 - 2 * np.pi *
-                        np.sin(np.pi * self.t)**3 * np.cos(x[0] * np.pi)**2 *
-                        np.cos(x[1] * np.pi)**2) * np.sin(x[0] * np.pi) * \
-            np.cos(x[1] * np.pi)
+        # Dependence on material parameters has been explicitly computed
+        return np.pi * ((np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 * np.cos(x[1] * np.pi)**2 + 1.3) * (np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 * np.cos(x[1] * np.pi)**2 + 2.7) * np.cos(np.pi * self.t) + 2 * np.pi * (np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 * np.cos(x[1] * np.pi)**2 + 4.1) * np.sin(np.pi * self.t) - 2 * np.pi * np.sin(x[0] * np.pi)**2 * np.sin(x[1] * np.pi)**2 * np.sin(np.pi * self.t)**3 - 2 * np.pi * np.sin(np.pi * self.t)**3 * np.cos(x[0] * np.pi)**2 * np.cos(x[1] * np.pi)**2) * np.sin(x[0] * np.pi) * np.cos(x[1] * np.pi)
 
     # Specific heat capacity
-    def c(self):
-        return 1.3
+    def c(self, T):
+        return 1.3 + T**2
 
     # Density
-    def rho(self):
-        return 2.7
+    def rho(self, T):
+        return 2.7 + T**2
 
     # Thermal conductivity
     def kappa(self, T):
@@ -130,6 +119,7 @@ def main():
     num_time_steps = 100
     n = 32
     k = 1
+    # TODO Use rectangle mesh
     mesh = create_unit_square(MPI.COMM_WORLD, n, n)
     problem = Problem()
     solve(mesh, k, t_end, num_time_steps, problem)

@@ -42,9 +42,13 @@ def solve(mesh, k, t_end, num_time_steps, problem):
     f = fem.Function(V)
     f.interpolate(problem.f)
 
-    a = ufl.inner(T, v) * ufl.dx + \
-        delta_t * ufl.inner(ufl.grad(T), ufl.grad(v)) * ufl.dx
-    L = ufl.inner(T_n + delta_t * f, v) * ufl.dx
+    rho = fem.Constant(mesh, PETSc.ScalarType(problem.rho()))
+    c = fem.Constant(mesh, PETSc.ScalarType(problem.c()))
+    kappa = fem.Constant(mesh, PETSc.ScalarType(problem.kappa()))
+
+    a = ufl.inner(rho * c * T, v) * ufl.dx + \
+        delta_t * ufl.inner(kappa * ufl.grad(T), ufl.grad(v)) * ufl.dx
+    L = ufl.inner(rho * c * T_n + delta_t * f, v) * ufl.dx
     bilinear_form = fem.form(a)
     linear_form = fem.form(L)
 
@@ -93,5 +97,20 @@ class Problem():
             np.sin(np.pi * self.t)
 
     def f(self, x):
+        c = self.c()
+        rho = self.rho()
+        kappa = self.kappa()
         return np.pi * np.sin(x[0] * np.pi) * np.cos(x[1] * np.pi) * \
-            (2 * np.pi * np.sin(ufl.pi * self.t) + np.cos(np.pi * self.t))
+            (2 * np.pi * kappa * np.sin(ufl.pi * self.t) + rho * c * np.cos(np.pi * self.t))
+
+    # Specific heat capacity
+    def c(self):
+        return 1.3
+
+    # Density
+    def rho(self):
+        return 2.7
+
+    # Thermal conductivity
+    def kappa(self):
+        return 4.1

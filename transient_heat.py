@@ -11,6 +11,17 @@ from dolfinx.nls import NewtonSolver
 import ufl
 
 
+def ufl_poly_from_table_data(x, y, degree, u):
+    """Given a list of point data x and y, this function returns a fitted
+    polynomial of degree `degree` in terms of the UFL `Function` `u`"""
+    coeffs = np.polynomial.Polynomial.fit(x, y, degree).convert().coef
+
+    poly = 0
+    for n in range(degree + 1):
+        poly += coeffs[n] * u**n
+    return poly
+
+
 def solve(mesh, k, t_end, num_time_steps, problem):
     V = fem.FunctionSpace(mesh, ("Lagrange", k))
 
@@ -103,26 +114,24 @@ class Problem():
 
     # Specific heat capacity
     def c(self, T):
-        return 1.3 + T**2
+        # Dummy data representing 1.3 + T**2
+        x = np.array([0.0, 0.25, 0.50, 0.75, 1.0])
+        y = np.array([1.3, 1.3625, 1.55, 1.8625, 2.3])
+        return ufl_poly_from_table_data(x, y, 2, T)
 
     # Density
     def rho(self, T):
-        return 2.7 + T**2
+        # Dummy data representing 2.7 + T**2
+        x = np.array([0.0, 0.25, 0.50, 0.75, 1.0])
+        y = np.array([2.7, 2.7625, 2.95, 3.2625, 3.7])
+        return ufl_poly_from_table_data(x, y, 2, T)
 
     # Thermal conductivity
     def kappa(self, T):
         # Dummy data representing 4.1 + T**2
         x = np.array([0.0, 0.25, 0.50, 0.75, 1.0])
         y = np.array([4.1, 4.1625, 4.35, 4.6625, 5.1])
-
-        degree = 2
-        coeffs = np.polynomial.Polynomial.fit(x, y, degree).convert().coef
-
-        kappa = 0
-        for n in range(degree + 1):
-            kappa += coeffs[n] * T**n
-
-        return kappa
+        return ufl_poly_from_table_data(x, y, 2, T)
 
 
 def main():

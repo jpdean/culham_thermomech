@@ -4,8 +4,9 @@ from mpi4py import MPI
 from petsc4py import PETSc
 
 from dolfinx import fem
-from dolfinx.mesh import locate_entities_boundary
+from dolfinx.mesh import create_unit_square, locate_entities_boundary
 from dolfinx.io import XDMFFile
+from dolfinx.nls import NewtonSolver
 
 import ufl
 
@@ -36,7 +37,6 @@ def solve(mesh, k, t_end, num_time_steps, problem):
     T_n = fem.Function(V)
     T_n.x.array[:] = T_h.x.array
 
-    T = ufl.TrialFunction(V)
     v = ufl.TestFunction(V)
 
     f = fem.Function(V)
@@ -46,20 +46,19 @@ def solve(mesh, k, t_end, num_time_steps, problem):
     c = fem.Constant(mesh, PETSc.ScalarType(problem.c()))
     kappa = fem.Constant(mesh, PETSc.ScalarType(problem.kappa()))
 
-    a = ufl.inner(rho * c * T, v) * ufl.dx + \
-        delta_t * ufl.inner(kappa * ufl.grad(T), ufl.grad(v)) * ufl.dx
-    L = ufl.inner(rho * c * T_n + delta_t * f, v) * ufl.dx
-    bilinear_form = fem.form(a)
-    linear_form = fem.form(L)
+    F = ufl.inner(rho * c * T_h, v) * ufl.dx + \
+        delta_t * ufl.inner(kappa * ufl.grad(T_h), ufl.grad(v)) * ufl.dx - \
+        ufl.inner(rho * c * T_n + delta_t * f, v) * ufl.dx
 
-    A = fem.assemble_matrix(bilinear_form, bcs=[bc])
-    A.assemble()
-    b = fem.create_vector(linear_form)
+    non_lin_problem = fem.NonlinearProblem(F, T_h, [bc])
+    solver = NewtonSolver(MPI.COMM_WORLD, non_lin_problem)
+    solver.convergence_criterion = "incremental"
+    solver.rtol = 1e-6
+    solver.report = True
 
-    solver = PETSc.KSP().create(mesh.comm)
-    solver.setOperators(A)
-    solver.setType(PETSc.KSP.Type.PREONLY)
-    solver.getPC().setType(PETSc.PC.Type.LU)
+    ksp = solver.krylov_solver
+    ksp.setType(PETSc.KSP.Type.PREONLY)
+    ksp.getPC().setType(PETSc.PC.Type.LU)
 
     for n in range(num_time_steps):
         problem.t += delta_t.value
@@ -67,17 +66,9 @@ def solve(mesh, k, t_end, num_time_steps, problem):
         T_d.interpolate(problem.T)
         f.interpolate(problem.f)
 
-        with b.localForm() as loc_b:
-            loc_b.set(0)
-        fem.assemble_vector(b, linear_form)
-
-        fem.apply_lifting(b, [bilinear_form], [[bc]])
-        b.ghostUpdate(
-            addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
-        fem.set_bc(b, [bc])
-
-        solver.solve(b, T_h.vector)
+        n, converged = solver.solve(T_h)
         T_h.x.scatter_forward()
+        assert(converged)
 
         T_n.x.array[:] = T_h.x.array
 

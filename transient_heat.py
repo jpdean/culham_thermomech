@@ -157,7 +157,7 @@ class Problem():
                       lambda x: np.isclose(x[1], 0),
                       lambda x: np.isclose(x[1], 1)]
 
-        def neumann_bc(self, x):
+        def neumann_bc(x):
             # NOTE This is just the Neumann BC for the right boundary
             # TODO Implement with UFL instead?
             return np.pi * (np.sin(x[0] * np.pi)**2 *

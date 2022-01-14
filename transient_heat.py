@@ -81,7 +81,7 @@ def solve(mesh, k, t_end, num_time_steps, problem):
         f.interpolate(problem.f)
         kappa_dT_dn.interpolate(problem.neumann_bc)
 
-        n, converged = solver.solve(T_h)
+        its, converged = solver.solve(T_h)
         T_h.x.scatter_forward()
         assert(converged)
 

@@ -49,6 +49,7 @@ def test_spatial_convergence():
 
     for i in range(len(ns)):
         problem.t = 0
+        # TODO Use refine rather than create new mesh?
         mesh = create_unit_square(MPI.COMM_WORLD, ns[i], ns[i])
         T_h = transient_heat.solve(mesh, k, t_end, num_time_steps, problem)
 

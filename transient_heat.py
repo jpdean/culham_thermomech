@@ -56,7 +56,8 @@ def solve(mesh, k, t_end, num_time_steps, problem):
         rho = mat["rho"](T_h)
         kappa = mat["kappa"](T_h)
         F += ufl.inner(rho * c * T_h, v) * dx(marker) + \
-            delta_t * ufl.inner(kappa * ufl.grad(T_h), ufl.grad(v)) * dx(marker) - \
+            delta_t * ufl.inner(kappa * ufl.grad(T_h),
+                                ufl.grad(v)) * dx(marker) - \
             ufl.inner(rho * c * T_n, v) * dx(marker)
 
     bcs, boundary_mt = problem.bcs(mesh)

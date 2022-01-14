@@ -5,7 +5,7 @@ from petsc4py import PETSc
 
 from dolfinx import fem
 from dolfinx.mesh import (create_unit_square, locate_entities_boundary,
-                          locate_entities, MeshTags)
+                          MeshTags)
 from dolfinx.io import XDMFFile
 from dolfinx.nls import NewtonSolver
 
@@ -200,8 +200,7 @@ class Problem():
         fdim = mesh.topology.dim - 1
         # Use index in the `boundaries` list as the unique marker
         for marker, locator in enumerate(boundaries):
-            # FIXME Use locate entities boundary?
-            facets = locate_entities(mesh, fdim, locator)
+            facets = locate_entities_boundary(mesh, fdim, locator)
             facet_indices.append(facets)
             facet_markers.append(np.full(len(facets), marker))
         facet_indices = np.array(np.hstack(facet_indices), dtype=np.int32)

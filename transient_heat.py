@@ -151,32 +151,25 @@ class Problem():
         y = np.array([4.1, 4.1625, 4.35, 4.6625, 5.1])
         return ufl_poly_from_table_data(x, y, 2, T)
 
-    def dirichlet_boundary_marker(self, x):
-        # TODO Replace with meshtags etc.
-        return np.logical_or(np.isclose(x[0], 0.0),
-                             np.logical_or(np.isclose(x[1], 0.0),
-                                           np.isclose(x[1], 1.0)))
-
-    def neumann_bc(self, x):
-        # TODO Implement proper BC interface
-        # NOTE This is just the Neumann BC for the right boundary
-        # TODO Implment with UFL instead?
-        return np.pi * (np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 *
-                        np.cos(x[1] * np.pi)**2 + 4.1) * \
-            np.sin(np.pi * self.t) * \
-            np.cos(x[0] * np.pi) * np.cos(x[1] * np.pi)
-
     def bcs(self, mesh):
-        # TODO Move self.neumann_bc into here etc.
         boundaries = [lambda x: np.isclose(x[0], 0),
                       lambda x: np.isclose(x[0], 1),
                       lambda x: np.isclose(x[1], 0),
                       lambda x: np.isclose(x[1], 1)]
 
+        def neumann_bc(self, x):
+            # NOTE This is just the Neumann BC for the right boundary
+            # TODO Implement with UFL instead?
+            return np.pi * (np.sin(x[0] * np.pi)**2 *
+                            np.sin(np.pi * self.t)**2 *
+                            np.cos(x[1] * np.pi)**2 + 4.1) * \
+                np.sin(np.pi * self.t) * np.cos(x[0] * np.pi) \
+                * np.cos(x[1] * np.pi)
+
         bcs = [{"type": "dirichlet",
                 "value": self.T},
                {"type": "neumann",
-                "value": self.neumann_bc},
+                "value": neumann_bc},
                {"type": "dirichlet",
                 "value": self.T},
                {"type": "dirichlet",

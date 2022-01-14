@@ -52,7 +52,8 @@ def solve(mesh, k, t_end, num_time_steps, problem):
     f = fem.Function(V)
     f.interpolate(problem.f)
 
-    # FIXME Simple constant may be sufficient instead of function for Neumann BC
+    # FIXME Simple constant may be sufficient instead of function for
+    # Neumann BC
     kappa_dT_dn = fem.Function(V)
     kappa_dT_dn.interpolate(problem.neumann_bc)
 
@@ -148,7 +149,10 @@ class Problem():
         # TODO Implement proper BC interface
         # NOTE This is just the Neumann BC for the right boundary
         # TODO Implment with UFL instead?
-        return np.pi * (np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 * np.cos(x[1] * np.pi)**2 + 4.1) * np.sin(np.pi * self.t) * np.cos(x[0] * np.pi) * np.cos(x[1] * np.pi)
+        return np.pi * (np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 *
+                        np.cos(x[1] * np.pi)**2 + 4.1) * \
+            np.sin(np.pi * self.t) * \
+            np.cos(x[0] * np.pi) * np.cos(x[1] * np.pi)
 
 
 def main():

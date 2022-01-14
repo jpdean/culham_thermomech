@@ -183,7 +183,13 @@ class Problem():
                     np.cos(x[1] * np.pi)**2 + 3.5)
 
         def h(T):
-            return 3.5 + T**2
+            # Test ufl.conditional works OK for complicated coefficients
+            # which should be approximated with multiple polynomials.
+            # Dummy data representing 2.7 + T**2
+            x = np.array([0.0, 0.25, 0.50, 0.75, 1.0])
+            y = np.array([3.5, 3.5625, 3.75, 4.0625, 4.5])
+            h_poly = ufl_poly_from_table_data(x, y, 2, T)
+            return ufl.conditional(T > 0.5, 3.5 + T**2, h_poly)
 
         # Think of nicer way to deal with Robin bc
         bcs = [{"type": "robin",

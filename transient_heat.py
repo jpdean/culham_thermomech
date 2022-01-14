@@ -4,7 +4,8 @@ from mpi4py import MPI
 from petsc4py import PETSc
 
 from dolfinx import fem
-from dolfinx.mesh import create_unit_square, locate_entities_boundary
+from dolfinx.mesh import (create_unit_square, locate_entities_boundary,
+                          locate_entities, MeshTags)
 from dolfinx.io import XDMFFile
 from dolfinx.nls import NewtonSolver
 
@@ -57,13 +58,16 @@ def solve(mesh, k, t_end, num_time_steps, problem):
     kappa_dT_dn = fem.Function(V)
     kappa_dT_dn.interpolate(problem.neumann_bc)
 
+    boundary_mt = problem.compute_boundary_tags(mesh)
+    ds = ufl.Measure("ds", domain=mesh, subdomain_data=boundary_mt)
+
     rho = problem.rho(T_h)
     c = problem.c(T_h)
     kappa = problem.kappa(T_h)
     F = ufl.inner(rho * c * T_h, v) * ufl.dx + \
         delta_t * ufl.inner(kappa * ufl.grad(T_h), ufl.grad(v)) * ufl.dx - \
         ufl.inner(rho * c * T_n + delta_t * f, v) * ufl.dx - \
-        delta_t * ufl.inner(kappa_dT_dn, v) * ufl.ds
+        delta_t * ufl.inner(kappa_dT_dn, v) * ds(1)
 
     non_lin_problem = fem.NonlinearProblem(F, T_h, [bc])
     solver = NewtonSolver(MPI.COMM_WORLD, non_lin_problem)
@@ -154,6 +158,24 @@ class Problem():
             np.sin(np.pi * self.t) * \
             np.cos(x[0] * np.pi) * np.cos(x[1] * np.pi)
 
+    def compute_boundary_tags(self, mesh):
+        boundaries = [(0, lambda x: np.isclose(x[0], 0)),
+                      (1, lambda x: np.isclose(x[0], 1)),
+                      (2, lambda x: np.isclose(x[1], 0)),
+                      (3, lambda x: np.isclose(x[1], 1))]
+        facet_indices, facet_markers = [], []
+        fdim = mesh.topology.dim - 1
+        for (marker, locator) in boundaries:
+            # FIXME Use locate entities boundary?
+            facets = locate_entities(mesh, fdim, locator)
+            facet_indices.append(facets)
+            facet_markers.append(np.full(len(facets), marker))
+        facet_indices = np.array(np.hstack(facet_indices), dtype=np.int32)
+        facet_markers = np.array(np.hstack(facet_markers), dtype=np.int32)
+        sorted_facets = np.argsort(facet_indices)
+        return MeshTags(mesh, fdim, facet_indices[sorted_facets],
+                        facet_markers[sorted_facets])
+
 
 def main():
     t_end = 2
@@ -163,6 +185,7 @@ def main():
     # TODO Use rectangle mesh
     mesh = create_unit_square(MPI.COMM_WORLD, n, n)
     problem = Problem()
+
     solve(mesh, k, t_end, num_time_steps, problem)
 
 

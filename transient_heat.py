@@ -173,7 +173,14 @@ class Problem():
         # Robin BC
         def T_inf(x):
             # NOTE This is just the Robin BC (T_inf) for the left boundary
-            return ((np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 * np.cos(x[1] * np.pi)**2 + 3.5) * np.sin(x[0] * np.pi) - np.pi * (np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 * np.cos(x[1] * np.pi)**2 + 4.1) * np.cos(x[0] * np.pi)) * np.sin(np.pi * self.t) * np.cos(x[1] * np.pi)/(np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 * np.cos(x[1] * np.pi)**2 + 3.5)
+            return ((np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 *
+                     np.cos(x[1] * np.pi)**2 + 3.5) * np.sin(x[0] * np.pi)
+                    - np.pi * (np.sin(x[0] * np.pi)**2 *
+                    np.sin(np.pi * self.t)**2 * np.cos(x[1] * np.pi)**2 +
+                    4.1) * np.cos(x[0] * np.pi)) * np.sin(np.pi * self.t) * \
+                np.cos(x[1] * np.pi) / \
+                (np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 *
+                    np.cos(x[1] * np.pi)**2 + 3.5)
 
         def h(T):
             return 3.5 + T**2

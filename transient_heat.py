@@ -45,10 +45,12 @@ def solve(mesh, k, t_end, num_time_steps, problem):
     f = fem.Function(V)
     f.interpolate(problem.f)
 
-    # FIXME Simple constant may be sufficient instead of function for
-    # Neumann BC
-    kappa_dT_dn = fem.Function(V)
-    kappa_dT_dn.interpolate(problem.neumann_bc)
+    rho = problem.rho(T_h)
+    c = problem.c(T_h)
+    kappa = problem.kappa(T_h)
+    F = ufl.inner(rho * c * T_h, v) * ufl.dx + \
+        delta_t * ufl.inner(kappa * ufl.grad(T_h), ufl.grad(v)) * ufl.dx - \
+        ufl.inner(rho * c * T_n + delta_t * f, v) * ufl.dx
 
     bcs, boundary_mt = problem.bcs(mesh)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=boundary_mt)
@@ -62,20 +64,18 @@ def solve(mesh, k, t_end, num_time_steps, problem):
     dirichlet_bcs = []
     # FIXME Make types enums
     for marker, bc in enumerate(bcs):
-        if bc["type"] == "dirichlet":
+        bc_type = bc["type"]
+        if bc_type == "dirichlet":
             facets = np.array(
                 boundary_mt.indices[boundary_mt.values == marker])
             dofs = fem.locate_dofs_topological(V, boundary_mt.dim, facets)
             dirichlet_bcs.append(
                 fem.dirichletbc(bc_funcs[marker], dofs))
-
-    rho = problem.rho(T_h)
-    c = problem.c(T_h)
-    kappa = problem.kappa(T_h)
-    F = ufl.inner(rho * c * T_h, v) * ufl.dx + \
-        delta_t * ufl.inner(kappa * ufl.grad(T_h), ufl.grad(v)) * ufl.dx - \
-        ufl.inner(rho * c * T_n + delta_t * f, v) * ufl.dx - \
-        delta_t * ufl.inner(kappa_dT_dn, v) * ds(1)
+        elif bc_type == "neumann":
+            F -= delta_t * ufl.inner(bc_funcs[marker], v) * ds(marker)
+        else:
+            raise Exception(
+                f"Boundary condition type {bc_type} not recognised")
 
     non_lin_problem = fem.NonlinearProblem(F, T_h, dirichlet_bcs)
     solver = NewtonSolver(MPI.COMM_WORLD, non_lin_problem)
@@ -93,7 +93,6 @@ def solve(mesh, k, t_end, num_time_steps, problem):
         for marker, bc_func in enumerate(bc_funcs):
             bc_func.interpolate(bcs[marker]["value"])
         f.interpolate(problem.f)
-        kappa_dT_dn.interpolate(problem.neumann_bc)
 
         its, converged = solver.solve(T_h)
         T_h.x.scatter_forward()

@@ -73,6 +73,10 @@ def solve(mesh, k, t_end, num_time_steps, problem):
                 fem.dirichletbc(bc_funcs[marker], dofs))
         elif bc_type == "neumann":
             F -= delta_t * ufl.inner(bc_funcs[marker], v) * ds(marker)
+        elif bc_type == "robin":
+            T_inf = bc_funcs[marker]
+            h = bc["h"](T_h)
+            F += delta_t * ufl.inner(h * (T_h - T_inf), v) * ds(marker)
         else:
             raise Exception(
                 f"Boundary condition type {bc_type} not recognised")
@@ -166,8 +170,18 @@ class Problem():
                 np.sin(np.pi * self.t) * np.cos(x[0] * np.pi) \
                 * np.cos(x[1] * np.pi)
 
-        bcs = [{"type": "dirichlet",
-                "value": self.T},
+        # Robin BC
+        def T_inf(x):
+            # NOTE This is just the Robin BC (T_inf) for the left boundary
+            return ((np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 * np.cos(x[1] * np.pi)**2 + 3.5) * np.sin(x[0] * np.pi) - np.pi * (np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 * np.cos(x[1] * np.pi)**2 + 4.1) * np.cos(x[0] * np.pi)) * np.sin(np.pi * self.t) * np.cos(x[1] * np.pi)/(np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 * np.cos(x[1] * np.pi)**2 + 3.5)
+
+        def h(T):
+            return 3.5 + T**2
+
+        # Think of nicer way to deal with Robin bc
+        bcs = [{"type": "robin",
+                "value": T_inf,
+                "h": h},
                {"type": "neumann",
                 "value": neumann_bc},
                {"type": "dirichlet",

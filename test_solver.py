@@ -37,29 +37,24 @@ def test_temporal_convergence():
 
 def test_spatial_convergence():
     t_end = 1.5
-    num_time_steps = 2000
-    n = 8
+    num_time_steps = 200
     k = 1
-    mesh = create_unit_square(MPI.COMM_WORLD, n, n)
     problem = transient_heat.Problem()
-    T_h = transient_heat.solve(mesh, k, t_end, num_time_steps, problem)
-
-    V_e = fem.FunctionSpace(mesh, ("Lagrange", k + 3))
-    T_e = fem.Function(V_e)
-    T_e.interpolate(problem.T)
-
     errors_L2 = []
-    errors_L2.append(compute_error_L2_norm(mesh.comm, T_h, T_e))
+    ns = [8, 16]
 
-    mesh = create_unit_square(MPI.COMM_WORLD, 2 * n, 2 * n)
-    problem.t = 0
-    T_h = transient_heat.solve(mesh, k, t_end, num_time_steps, problem)
+    for i in range(len(ns)):
+        problem.t = 0
+        mesh = create_unit_square(MPI.COMM_WORLD, ns[i], ns[i])
+        T_h = transient_heat.solve(mesh, k, t_end, num_time_steps, problem)
 
-    V_e = fem.FunctionSpace(mesh, ("Lagrange", k + 3))
-    T_e = fem.Function(V_e)
-    T_e.interpolate(problem.T)
+        V_e = fem.FunctionSpace(mesh, ("Lagrange", k + 3))
+        T_e = fem.Function(V_e)
+        T_e.interpolate(problem.T)
 
-    errors_L2.append(compute_error_L2_norm(mesh.comm, T_h, T_e))
+        errors_L2.append(compute_error_L2_norm(mesh.comm, T_h, T_e))
 
-    # Check doubling number of elements reduces error by factor of four
-    assert(np.isclose(errors_L2[1] / errors_L2[0], 0.25, atol=0.015))
+    r = np.log(errors_L2[-1] / errors_L2[-2]) / \
+        np.log(ns[-2] / ns[-1])
+
+    assert(np.isclose(r, 2.0, atol=0.1))

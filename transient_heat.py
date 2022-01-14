@@ -26,14 +26,6 @@ def ufl_poly_from_table_data(x, y, degree, u):
 def solve(mesh, k, t_end, num_time_steps, problem):
     V = fem.FunctionSpace(mesh, ("Lagrange", k))
 
-    facet_dim = mesh.topology.dim - 1
-    boundary_facets = locate_entities_boundary(
-        mesh, facet_dim, problem.dirichlet_boundary_marker)
-    T_d = fem.Function(V)
-    T_d.interpolate(problem.T)
-    bc = fem.dirichletbc(
-        T_d, fem.locate_dofs_topological(V, facet_dim, boundary_facets))
-
     # Time step
     delta_t = fem.Constant(mesh, PETSc.ScalarType(t_end / num_time_steps))
 
@@ -58,8 +50,24 @@ def solve(mesh, k, t_end, num_time_steps, problem):
     kappa_dT_dn = fem.Function(V)
     kappa_dT_dn.interpolate(problem.neumann_bc)
 
-    boundary_mt = problem.compute_boundary_tags(mesh)
+    bcs, boundary_mt = problem.bcs(mesh)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=boundary_mt)
+
+    bc_funcs = []
+    for bc in bcs:
+        func = fem.Function(V)
+        func.interpolate(bc["value"])
+        bc_funcs.append(func)
+
+    dirichlet_bcs = []
+    # FIXME Make types enums
+    for marker, bc in enumerate(bcs):
+        if bc["type"] == "dirichlet":
+            facets = np.array(
+                boundary_mt.indices[boundary_mt.values == marker])
+            dofs = fem.locate_dofs_topological(V, boundary_mt.dim, facets)
+            dirichlet_bcs.append(
+                fem.dirichletbc(bc_funcs[marker], dofs))
 
     rho = problem.rho(T_h)
     c = problem.c(T_h)
@@ -69,7 +77,7 @@ def solve(mesh, k, t_end, num_time_steps, problem):
         ufl.inner(rho * c * T_n + delta_t * f, v) * ufl.dx - \
         delta_t * ufl.inner(kappa_dT_dn, v) * ds(1)
 
-    non_lin_problem = fem.NonlinearProblem(F, T_h, [bc])
+    non_lin_problem = fem.NonlinearProblem(F, T_h, dirichlet_bcs)
     solver = NewtonSolver(MPI.COMM_WORLD, non_lin_problem)
     solver.convergence_criterion = "incremental"
     solver.rtol = 1e-6
@@ -82,7 +90,8 @@ def solve(mesh, k, t_end, num_time_steps, problem):
     for n in range(num_time_steps):
         problem.t += delta_t.value
 
-        T_d.interpolate(problem.T)
+        for marker, bc_func in enumerate(bc_funcs):
+            bc_func.interpolate(bcs[marker]["value"])
         f.interpolate(problem.f)
         kappa_dT_dn.interpolate(problem.neumann_bc)
 
@@ -158,14 +167,26 @@ class Problem():
             np.sin(np.pi * self.t) * \
             np.cos(x[0] * np.pi) * np.cos(x[1] * np.pi)
 
-    def compute_boundary_tags(self, mesh):
-        boundaries = [(0, lambda x: np.isclose(x[0], 0)),
-                      (1, lambda x: np.isclose(x[0], 1)),
-                      (2, lambda x: np.isclose(x[1], 0)),
-                      (3, lambda x: np.isclose(x[1], 1))]
+    def bcs(self, mesh):
+        # TODO Move self.neumann_bc into here etc.
+        boundaries = [lambda x: np.isclose(x[0], 0),
+                      lambda x: np.isclose(x[0], 1),
+                      lambda x: np.isclose(x[1], 0),
+                      lambda x: np.isclose(x[1], 1)]
+
+        bcs = [{"type": "dirichlet",
+                "value": self.T},
+               {"type": "neumann",
+                "value": self.neumann_bc},
+               {"type": "dirichlet",
+                "value": self.T},
+               {"type": "dirichlet",
+                "value": self.T}]
+
         facet_indices, facet_markers = [], []
         fdim = mesh.topology.dim - 1
-        for (marker, locator) in boundaries:
+        # Use index in the `boundaries` list as the unique marker
+        for marker, locator in enumerate(boundaries):
             # FIXME Use locate entities boundary?
             facets = locate_entities(mesh, fdim, locator)
             facet_indices.append(facets)
@@ -173,8 +194,9 @@ class Problem():
         facet_indices = np.array(np.hstack(facet_indices), dtype=np.int32)
         facet_markers = np.array(np.hstack(facet_markers), dtype=np.int32)
         sorted_facets = np.argsort(facet_indices)
-        return MeshTags(mesh, fdim, facet_indices[sorted_facets],
-                        facet_markers[sorted_facets])
+        mt = MeshTags(mesh, fdim, facet_indices[sorted_facets],
+                      facet_markers[sorted_facets])
+        return bcs, mt
 
 
 def main():

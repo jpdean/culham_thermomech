@@ -5,7 +5,7 @@ from petsc4py import PETSc
 
 from dolfinx import fem
 from dolfinx.mesh import (create_unit_square, locate_entities_boundary,
-                          MeshTags)
+                          MeshTags, locate_entities)
 from dolfinx.io import XDMFFile
 from dolfinx.nls import NewtonSolver
 
@@ -45,12 +45,19 @@ def solve(mesh, k, t_end, num_time_steps, problem):
     f = fem.Function(V)
     f.interpolate(problem.f)
 
-    rho = problem.rho(T_h)
-    c = problem.c(T_h)
-    kappa = problem.kappa(T_h)
-    F = ufl.inner(rho * c * T_h, v) * ufl.dx + \
-        delta_t * ufl.inner(kappa * ufl.grad(T_h), ufl.grad(v)) * ufl.dx - \
-        ufl.inner(rho * c * T_n + delta_t * f, v) * ufl.dx
+    F = - ufl.inner(delta_t * f, v) * ufl.dx
+
+    materials, mat_mt = problem.materials(mesh)
+    dx = ufl.Measure("dx", domain=mesh, subdomain_data=mat_mt)
+
+    # FIXME I think this creates a new kernel for every material
+    for marker, mat in enumerate(materials):
+        c = mat["c"](T_h)
+        rho = mat["rho"](T_h)
+        kappa = mat["kappa"](T_h)
+        F += ufl.inner(rho * c * T_h, v) * dx(marker) + \
+            delta_t * ufl.inner(kappa * ufl.grad(T_h), ufl.grad(v)) * dx(marker) - \
+            ufl.inner(rho * c * T_n, v) * dx(marker)
 
     bcs, boundary_mt = problem.bcs(mesh)
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=boundary_mt)
@@ -134,26 +141,56 @@ class Problem():
                         np.cos(x[1] * np.pi)**2) * np.sin(x[0] * np.pi) * \
             np.cos(x[1] * np.pi)
 
-    # Specific heat capacity
-    def c(self, T):
-        # Dummy data representing 1.3 + T**2
-        x = np.array([0.0, 0.25, 0.50, 0.75, 1.0])
-        y = np.array([1.3, 1.3625, 1.55, 1.8625, 2.3])
-        return ufl_poly_from_table_data(x, y, 2, T)
+    def materials(self, mesh):
+        # Specific heat capacity
+        def c(T):
+            # Dummy data representing 1.3 + T**2
+            x = np.array([0.0, 0.25, 0.50, 0.75, 1.0])
+            y = np.array([1.3, 1.3625, 1.55, 1.8625, 2.3])
+            return ufl_poly_from_table_data(x, y, 2, T)
 
-    # Density
-    def rho(self, T):
-        # Dummy data representing 2.7 + T**2
-        x = np.array([0.0, 0.25, 0.50, 0.75, 1.0])
-        y = np.array([2.7, 2.7625, 2.95, 3.2625, 3.7])
-        return ufl_poly_from_table_data(x, y, 2, T)
+        # Density
+        def rho(T):
+            # Dummy data representing 2.7 + T**2
+            x = np.array([0.0, 0.25, 0.50, 0.75, 1.0])
+            y = np.array([2.7, 2.7625, 2.95, 3.2625, 3.7])
+            return ufl_poly_from_table_data(x, y, 2, T)
 
-    # Thermal conductivity
-    def kappa(self, T):
-        # Dummy data representing 4.1 + T**2
-        x = np.array([0.0, 0.25, 0.50, 0.75, 1.0])
-        y = np.array([4.1, 4.1625, 4.35, 4.6625, 5.1])
-        return ufl_poly_from_table_data(x, y, 2, T)
+        # Thermal conductivity
+        def kappa(T):
+            # Dummy data representing 4.1 + T**2
+            x = np.array([0.0, 0.25, 0.50, 0.75, 1.0])
+            y = np.array([4.1, 4.1625, 4.35, 4.6625, 5.1])
+            return ufl_poly_from_table_data(x, y, 2, T)
+
+        materials = []
+        mat_1 = {"name": "mat_1",
+                 "c": c,
+                 "rho": rho,
+                 "kappa": kappa}
+        mat_2 = {"name": "mat_1",
+                 "c": lambda T: 1.3 + T**2,
+                 "rho": lambda T: 2.7 + T**2,
+                 "kappa": lambda T: 4.1 + T**2}
+        materials.append(mat_1)
+        materials.append(mat_2)
+
+        # FIXME This code is duplicated for setting BC's. Make function
+        regions = [lambda x: x[0] <= 0.5,
+                   lambda x: x[0] >= 0.5]
+        cell_indices, cell_markers = [], []
+        tdim = mesh.topology.dim
+        # Use index in the `regions` list as the unique marker
+        for marker, locator in enumerate(regions):
+            cells = locate_entities(mesh, tdim, locator)
+            cell_indices.append(cells)
+            cell_markers.append(np.full(len(cells), marker))
+        cell_indices = np.array(np.hstack(cell_indices), dtype=np.int32)
+        cell_markers = np.array(np.hstack(cell_markers), dtype=np.int32)
+        sorted_cells = np.argsort(cell_indices)
+        mt = MeshTags(mesh, tdim, cell_indices[sorted_cells],
+                      cell_markers[sorted_cells])
+        return materials, mt
 
     def bcs(self, mesh):
         boundaries = [lambda x: np.isclose(x[0], 0),

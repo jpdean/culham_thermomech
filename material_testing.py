@@ -8,11 +8,15 @@ y = np.array([401.0, 398.0, 395.0, 391.0, 388.0, 384.0, 381.0, 378.0, 374.0,
               371.0, 367.0, 364.0, 360.0, 357.0, 354.0, 350.0, 347.0, 344.0,
               340.0, 337.0, 334.0])
 
-coeffs = np.polynomial.Polynomial.fit(x, y, 1).convert().coef
-
 
 fig, ax = plt.subplots()
 ax.plot(x, y)
-ax.plot(x, coeffs[0] + coeffs[1] * x)
+
+degree = 1
+coeffs = np.polynomial.Polynomial.fit(x, y, degree).convert().coef
+y_poly = np.zeros_like(x)
+for n in range(degree + 1):
+    y_poly += coeffs[n] * x**n
+ax.plot(x, y_poly)
 
 plt.show()

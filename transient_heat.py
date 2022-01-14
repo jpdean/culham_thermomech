@@ -4,7 +4,8 @@ from mpi4py import MPI
 from petsc4py import PETSc
 
 from dolfinx import fem
-from dolfinx.mesh import create_unit_square, locate_entities_boundary
+from dolfinx.mesh import (create_unit_square, locate_entities_boundary,
+                          locate_entities, MeshTags)
 from dolfinx.io import XDMFFile
 from dolfinx.nls import NewtonSolver
 
@@ -25,14 +26,6 @@ def ufl_poly_from_table_data(x, y, degree, u):
 def solve(mesh, k, t_end, num_time_steps, problem):
     V = fem.FunctionSpace(mesh, ("Lagrange", k))
 
-    facet_dim = mesh.topology.dim - 1
-    boundary_facets = locate_entities_boundary(
-        mesh, facet_dim, problem.dirichlet_boundary_marker)
-    T_d = fem.Function(V)
-    T_d.interpolate(problem.T)
-    bc = fem.dirichletbc(
-        T_d, fem.locate_dofs_topological(V, facet_dim, boundary_facets))
-
     # Time step
     delta_t = fem.Constant(mesh, PETSc.ScalarType(t_end / num_time_steps))
 
@@ -52,20 +45,43 @@ def solve(mesh, k, t_end, num_time_steps, problem):
     f = fem.Function(V)
     f.interpolate(problem.f)
 
-    # FIXME Simple constant may be sufficient instead of function for
-    # Neumann BC
-    kappa_dT_dn = fem.Function(V)
-    kappa_dT_dn.interpolate(problem.neumann_bc)
-
     rho = problem.rho(T_h)
     c = problem.c(T_h)
     kappa = problem.kappa(T_h)
     F = ufl.inner(rho * c * T_h, v) * ufl.dx + \
         delta_t * ufl.inner(kappa * ufl.grad(T_h), ufl.grad(v)) * ufl.dx - \
-        ufl.inner(rho * c * T_n + delta_t * f, v) * ufl.dx - \
-        delta_t * ufl.inner(kappa_dT_dn, v) * ufl.ds
+        ufl.inner(rho * c * T_n + delta_t * f, v) * ufl.dx
 
-    non_lin_problem = fem.NonlinearProblem(F, T_h, [bc])
+    bcs, boundary_mt = problem.bcs(mesh)
+    ds = ufl.Measure("ds", domain=mesh, subdomain_data=boundary_mt)
+
+    bc_funcs = []
+    for bc in bcs:
+        func = fem.Function(V)
+        func.interpolate(bc["value"])
+        bc_funcs.append(func)
+
+    dirichlet_bcs = []
+    # FIXME Make types enums
+    for marker, bc in enumerate(bcs):
+        bc_type = bc["type"]
+        if bc_type == "dirichlet":
+            facets = np.array(
+                boundary_mt.indices[boundary_mt.values == marker])
+            dofs = fem.locate_dofs_topological(V, boundary_mt.dim, facets)
+            dirichlet_bcs.append(
+                fem.dirichletbc(bc_funcs[marker], dofs))
+        elif bc_type == "neumann":
+            F -= delta_t * ufl.inner(bc_funcs[marker], v) * ds(marker)
+        elif bc_type == "robin":
+            T_inf = bc_funcs[marker]
+            h = bc["h"](T_h)
+            F += delta_t * ufl.inner(h * (T_h - T_inf), v) * ds(marker)
+        else:
+            raise Exception(
+                f"Boundary condition type {bc_type} not recognised")
+
+    non_lin_problem = fem.NonlinearProblem(F, T_h, dirichlet_bcs)
     solver = NewtonSolver(MPI.COMM_WORLD, non_lin_problem)
     solver.convergence_criterion = "incremental"
     solver.rtol = 1e-6
@@ -78,9 +94,9 @@ def solve(mesh, k, t_end, num_time_steps, problem):
     for n in range(num_time_steps):
         problem.t += delta_t.value
 
-        T_d.interpolate(problem.T)
+        for marker, bc_func in enumerate(bc_funcs):
+            bc_func.interpolate(bcs[marker]["value"])
         f.interpolate(problem.f)
-        kappa_dT_dn.interpolate(problem.neumann_bc)
 
         its, converged = solver.solve(T_h)
         T_h.x.scatter_forward()
@@ -139,20 +155,54 @@ class Problem():
         y = np.array([4.1, 4.1625, 4.35, 4.6625, 5.1])
         return ufl_poly_from_table_data(x, y, 2, T)
 
-    def dirichlet_boundary_marker(self, x):
-        # TODO Replace with meshtags etc.
-        return np.logical_or(np.isclose(x[0], 0.0),
-                             np.logical_or(np.isclose(x[1], 0.0),
-                                           np.isclose(x[1], 1.0)))
+    def bcs(self, mesh):
+        boundaries = [lambda x: np.isclose(x[0], 0),
+                      lambda x: np.isclose(x[0], 1),
+                      lambda x: np.isclose(x[1], 0),
+                      lambda x: np.isclose(x[1], 1)]
 
-    def neumann_bc(self, x):
-        # TODO Implement proper BC interface
-        # NOTE This is just the Neumann BC for the right boundary
-        # TODO Implment with UFL instead?
-        return np.pi * (np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 *
-                        np.cos(x[1] * np.pi)**2 + 4.1) * \
-            np.sin(np.pi * self.t) * \
-            np.cos(x[0] * np.pi) * np.cos(x[1] * np.pi)
+        def neumann_bc(x):
+            # NOTE This is just the Neumann BC for the right boundary
+            # TODO Implement with UFL instead?
+            return np.pi * (np.sin(x[0] * np.pi)**2 *
+                            np.sin(np.pi * self.t)**2 *
+                            np.cos(x[1] * np.pi)**2 + 4.1) * \
+                np.sin(np.pi * self.t) * np.cos(x[0] * np.pi) \
+                * np.cos(x[1] * np.pi)
+
+        # Robin BC
+        def T_inf(x):
+            # NOTE This is just the Robin BC (T_inf) for the left boundary
+            return ((np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 * np.cos(x[1] * np.pi)**2 + 3.5) * np.sin(x[0] * np.pi) - np.pi * (np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 * np.cos(x[1] * np.pi)**2 + 4.1) * np.cos(x[0] * np.pi)) * np.sin(np.pi * self.t) * np.cos(x[1] * np.pi)/(np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 * np.cos(x[1] * np.pi)**2 + 3.5)
+
+        def h(T):
+            return 3.5 + T**2
+
+        # Think of nicer way to deal with Robin bc
+        bcs = [{"type": "robin",
+                "value": T_inf,
+                "h": h},
+               {"type": "neumann",
+                "value": neumann_bc},
+               {"type": "dirichlet",
+                "value": self.T},
+               {"type": "dirichlet",
+                "value": self.T}]
+
+        facet_indices, facet_markers = [], []
+        fdim = mesh.topology.dim - 1
+        # Use index in the `boundaries` list as the unique marker
+        for marker, locator in enumerate(boundaries):
+            # FIXME Use locate entities boundary?
+            facets = locate_entities(mesh, fdim, locator)
+            facet_indices.append(facets)
+            facet_markers.append(np.full(len(facets), marker))
+        facet_indices = np.array(np.hstack(facet_indices), dtype=np.int32)
+        facet_markers = np.array(np.hstack(facet_markers), dtype=np.int32)
+        sorted_facets = np.argsort(facet_indices)
+        mt = MeshTags(mesh, fdim, facet_indices[sorted_facets],
+                      facet_markers[sorted_facets])
+        return bcs, mt
 
 
 def main():
@@ -163,6 +213,7 @@ def main():
     # TODO Use rectangle mesh
     mesh = create_unit_square(MPI.COMM_WORLD, n, n)
     problem = Problem()
+
     solve(mesh, k, t_end, num_time_steps, problem)
 
 

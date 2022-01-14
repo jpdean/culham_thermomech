@@ -11,6 +11,11 @@ def compute_error_L2_norm(comm, T_h, T_e):
         fem.assemble_scalar(fem.form((T_h - T_e)**2 * ufl.dx)), op=MPI.SUM))
 
 
+def compute_convergence_rate(errors_L2, ns):
+    return np.log(errors_L2[-1] / errors_L2[-2]) / \
+           np.log(ns[-2] / ns[-1])
+
+
 def test_temporal_convergence():
     t_end = 1.5
     n = 64
@@ -29,8 +34,7 @@ def test_temporal_convergence():
         T_h = transient_heat.solve(mesh, k, t_end, num_time_steps[i], problem)
         errors_L2.append(compute_error_L2_norm(mesh.comm, T_h, T_e))
 
-    r = np.log(errors_L2[-1] / errors_L2[-2]) / \
-        np.log(num_time_steps[-2] / num_time_steps[-1])
+    r = compute_convergence_rate(errors_L2, num_time_steps)
 
     assert(np.isclose(r, 1.0, atol=0.1))
 
@@ -54,7 +58,6 @@ def test_spatial_convergence():
 
         errors_L2.append(compute_error_L2_norm(mesh.comm, T_h, T_e))
 
-    r = np.log(errors_L2[-1] / errors_L2[-2]) / \
-        np.log(ns[-2] / ns[-1])
+    r = compute_convergence_rate(errors_L2, ns)
 
     assert(np.isclose(r, 2.0, atol=0.1))

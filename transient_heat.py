@@ -163,6 +163,8 @@ class Problem():
             y = np.array([4.1, 4.1625, 4.35, 4.6625, 5.1])
             return ufl_poly_from_table_data(x, y, 2, T)
 
+        # Create two materials (they are the same, just mat_1
+        # is a numpy polynomial fit of mat_2)
         materials = []
         mat_1 = {"name": "mat_1",
                  "c": c,

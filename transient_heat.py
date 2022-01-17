@@ -23,7 +23,7 @@ def ufl_poly_from_table_data(x, y, degree, u):
     return poly
 
 
-def solve(mesh, k, t_end, num_time_steps, problem):
+def solve(mesh, k, t_end, num_time_steps, problem, use_iterative_solver=True):
     V = fem.FunctionSpace(mesh, ("Lagrange", k))
 
     # Time step

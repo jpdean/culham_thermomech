@@ -102,6 +102,7 @@ def solve(mesh, k, t_end, num_time_steps, problem):
     for n in range(num_time_steps):
         problem.t += delta_t.value
 
+        # FIXME Only update time dependent functions
         for marker, bc_func in enumerate(bc_funcs):
             bc_func.interpolate(bcs[marker]["value"])
         f.interpolate(problem.f)

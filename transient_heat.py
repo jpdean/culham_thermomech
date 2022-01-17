@@ -96,8 +96,19 @@ def solve(mesh, k, t_end, num_time_steps, problem):
     solver.report = True
 
     ksp = solver.krylov_solver
-    ksp.setType(PETSc.KSP.Type.PREONLY)
-    ksp.getPC().setType(PETSc.PC.Type.LU)
+
+    if use_iterative_solver:
+        # NOTE May need to use GMRES as matrix isn't symmetric due to
+        # non-linearity
+        ksp.setType(PETSc.KSP.Type.CG)
+        ksp.setTolerances(rtol=1.0e-12)
+        ksp.getPC().setType(PETSc.PC.Type.HYPRE)
+        ksp.getPC().setHYPREType("boomeramg")
+    else:
+        ksp.setType(PETSc.KSP.Type.PREONLY)
+        ksp.getPC().setType(PETSc.PC.Type.LU)
+    viewer = PETSc.Viewer().createASCII("viewer.txt")
+    ksp.view(viewer)
 
     for n in range(num_time_steps):
         problem.t += delta_t.value

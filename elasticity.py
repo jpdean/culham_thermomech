@@ -14,7 +14,7 @@ n = 32
 mesh = create_unit_square(MPI.COMM_WORLD, n, n)
 
 # Young's modulus
-E = 1.0e9
+E = 1.0
 # Poisson's ratio
 nu = 0.33
 
@@ -30,16 +30,23 @@ def sigma(v):
         len(v))
 
 
+x = ufl.SpatialCoordinate(mesh)
+u_e = ufl.as_vector((ufl.sin(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1]),
+                     ufl.sin(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1])))
+f = - ufl.div(sigma(u_e))
+
 V = VectorFunctionSpace(mesh, ("Lagrange", 1))
 
 u = ufl.TrialFunction(V)
 v = ufl.TestFunction(V)
-f = ufl.as_vector((0.0, - 1.0))
 a = ufl.inner(sigma(u), ufl.grad(v)) * ufl.dx
 L = ufl.inner(f, v) * ufl.dx  # TODO Add pressure BC
 
 bc = dirichletbc(np.array([0, 0, 0], dtype=PETSc.ScalarType),
-                 locate_dofs_geometrical(V, lambda x: np.isclose(x[0], 0.0)),
+                 locate_dofs_geometrical(V, lambda x: np.logical_or(np.logical_or(np.isclose(x[0], 0.0),
+                                                                                  np.isclose(x[0], 1.0)),
+                                                                    np.logical_or(np.isclose(x[1], 0.0),
+                                                                                  np.isclose(x[1], 1.0)))),
                  V)
 
 problem = LinearProblem(a, L, bcs=[bc], petsc_options={"ksp_type": "preonly",
@@ -49,5 +56,3 @@ u_h = problem.solve()
 with XDMFFile(MPI.COMM_WORLD, "u.xdmf", "w") as file:
     file.write_mesh(mesh)
     file.write_function(u_h)
-
-# u_e = ufl.as_

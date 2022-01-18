@@ -1,6 +1,6 @@
 import numpy as np
 
-from dolfinx.fem import (VectorFunctionSpace, dirichletbc, form,
+from dolfinx.fem import (VectorFunctionSpace, dirichletbc,
                          locate_dofs_geometrical, LinearProblem)
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import create_unit_square

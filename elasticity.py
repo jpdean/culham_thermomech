@@ -45,8 +45,8 @@ bc = dirichletbc(np.array([0, 0, 0], dtype=PETSc.ScalarType),
 
 problem = LinearProblem(a, L, bcs=[bc], petsc_options={"ksp_type": "preonly",
                                                        "pc_type": "lu"})
-u = problem.solve()
+u_h = problem.solve()
 
 with XDMFFile(MPI.COMM_WORLD, "u.xdmf", "w") as file:
     file.write_mesh(mesh)
-    file.write_function(u)
+    file.write_function(u_h)

@@ -34,24 +34,25 @@ x = ufl.SpatialCoordinate(mesh)
 u_e = ufl.as_vector((ufl.sin(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1]),
                      ufl.sin(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1])))
 f = - ufl.div(sigma(u_e))
+p_n = ufl.dot(sigma(u_e), ufl.FacetNormal(mesh))
 
 V = VectorFunctionSpace(mesh, ("Lagrange", 1))
 
 u = ufl.TrialFunction(V)
 v = ufl.TestFunction(V)
 a = ufl.inner(sigma(u), ufl.grad(v)) * ufl.dx
-L = ufl.inner(f, v) * ufl.dx  # TODO Add pressure BC
+L = ufl.inner(f, v) * ufl.dx + ufl.inner(p_n, v) * ufl.ds
 
 bc = dirichletbc(np.array([0, 0, 0], dtype=PETSc.ScalarType),
                  locate_dofs_geometrical(V, lambda x: np.logical_or(np.logical_or(np.isclose(x[0], 0.0),
                                                                                   np.isclose(x[0], 1.0)),
-                                                                    np.logical_or(np.isclose(x[1], 0.0),
-                                                                                  np.isclose(x[1], 1.0)))),
+                                                                    np.isclose(x[1], 0.0))),
                  V)
 
 problem = LinearProblem(a, L, bcs=[bc], petsc_options={"ksp_type": "preonly",
                                                        "pc_type": "lu"})
 u_h = problem.solve()
+u_h.name = "u"
 
 with XDMFFile(MPI.COMM_WORLD, "u.xdmf", "w") as file:
     file.write_mesh(mesh)

@@ -32,7 +32,7 @@ def create_problem_0(mesh):
                                 np.sin(np.pi * x[0]) *
                                 np.cos(np.pi * x[1]) *
                                 np.sin(np.pi * t))
-    f = TimeDependentExpression(
+    f_T = TimeDependentExpression(
         lambda x, t: np.pi * ((np.sin(x[0] * np.pi)**2 * np.sin(np.pi * t)**2 *
                                np.cos(x[1] * np.pi)**2 + 1.3) *
                               (np.sin(x[0] * np.pi)**2 * np.sin(np.pi * t)**2
@@ -45,6 +45,10 @@ def create_problem_0(mesh):
                               np.sin(np.pi * t)**3 * np.cos(x[0] * np.pi)**2 *
                               np.cos(x[1] * np.pi)**2) * np.sin(x[0] * np.pi) *
         np.cos(x[1] * np.pi))
+
+    x = ufl.SpatialCoordinate(mesh)
+    u = ufl.as_vector((ufl.sin(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1]),
+                       ufl.sin(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1])))
 
     # Materials
     # Specific heat capacity
@@ -71,16 +75,21 @@ def create_problem_0(mesh):
     # Create two materials (they are the same, just mat_1
     # is a numpy polynomial fit of mat_2)
     materials = []
-    mat_1 = {"name": "mat_1",
-             "c": c,
-             "rho": rho,
-             "kappa": kappa}
-    mat_2 = {"name": "mat_1",
-             "c": lambda T: 1.3 + T**2,
-             "rho": lambda T: 2.7 + T**2,
-             "kappa": lambda T: 4.1 + T**2}
-    materials.append(mat_1)
-    materials.append(mat_2)
+    # TODO Test ufl_poly_from_table_data for elastic properties
+    materials.append({"name": "mat_1",
+                      "c": c,
+                      "rho": rho,
+                      "kappa": kappa,
+                      "nu": 0.33,
+                      "E": 1.0 + 0.1 * T**2,
+                      "thermal_strain": (0.1 + 0.01 * T**3, 1.5)})
+    materials.append({"name": "mat_2",
+                      "c": lambda T: 1.3 + T**2,
+                      "rho": lambda T: 2.7 + T**2,
+                      "kappa": lambda T: 4.1 + T**2,
+                      "nu": 0.33,
+                      "E": 1.0 + 0.1 * T**2,
+                      "thermal_strain": (0.1 + 0.01 * T**3, 1.5)})
 
     def create_mesh_tags(regions, edim):
         entity_indices, entity_markers = [], []
@@ -150,4 +159,10 @@ def create_problem_0(mesh):
 
     bc_mt = create_mesh_tags(boundaries, tdim - 1)
 
-    return T, f, materials, material_mt, bcs, bc_mt
+    return {"T": T,
+            "u": u,
+            "f_T": f_T,
+            "materials": materials,
+            "material_mt": material_mt,
+            "bcs": bcs,
+            "bc_mt": bc_mt}

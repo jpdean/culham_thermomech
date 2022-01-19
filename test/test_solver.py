@@ -4,6 +4,7 @@ from dolfinx.mesh import create_unit_square
 from dolfinx import fem
 import ufl
 import numpy as np
+from problems import Problem
 
 
 def compute_error_L2_norm(comm, T_h, T_e):
@@ -21,7 +22,7 @@ def test_temporal_convergence():
     n = 64
     k = 1
     mesh = create_unit_square(MPI.COMM_WORLD, n, n)
-    problem = transient_heat.Problem()
+    problem = Problem()
     num_time_steps = [16, 32]
 
     errors_L2 = []
@@ -43,7 +44,7 @@ def test_spatial_convergence():
     t_end = 1.5
     num_time_steps = 200
     k = 1
-    problem = transient_heat.Problem()
+    problem = Problem()
     errors_L2 = []
     ns = [8, 16]
 

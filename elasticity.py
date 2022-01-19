@@ -2,13 +2,15 @@ import numpy as np
 
 from dolfinx.fem import (VectorFunctionSpace, dirichletbc,
                          locate_dofs_geometrical, LinearProblem,
-                         assemble_scalar, form)
+                         assemble_scalar, form, FunctionSpace,
+                         Function)
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import create_unit_square
 import ufl
 
 from mpi4py import MPI
 from petsc4py import PETSc
+from problems import create_problem_0
 
 
 def sigma(v, T, T_ref, alpha_L, E, nu):
@@ -26,6 +28,7 @@ def solve(mesh, k, nu, T, T_ref, E, alpha_L, f, p):
 
     u = ufl.TrialFunction(V)
     v = ufl.TestFunction(V)
+    # FIXME Should be p * n, not p \cdot n
     F = ufl.inner(sigma(u, T, T_ref, alpha_L, E, nu), ufl.grad(v)) * ufl.dx - \
         ufl.inner(f, v) * ufl.dx - \
         ufl.inner(ufl.dot(p, ufl.FacetNormal(mesh)), v) * ufl.ds
@@ -58,26 +61,28 @@ def main():
     n = 32
     k = 1
     mesh = create_unit_square(MPI.COMM_WORLD, n, n)
-    # Poisson's ratio
-    nu = 0.33
-    # Thermal expansion coefficient
-    # FIXME Do this properly
-    T_ref = 1.5
-    x = ufl.SpatialCoordinate(mesh)
-    T = T_ref + ufl.cos(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1])
-    # Young's modulus
-    E = 1.0 + 0.1 * T**2
-    alpha_L = 0.1 + 0.01 * T**3
-    u_e = ufl.as_vector((ufl.sin(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1]),
-                         ufl.sin(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1])))
-    f = - ufl.div(sigma(u_e, T, T_ref, alpha_L, E, nu))
-    # Here, purely for simplicity and the purposes of comparing with the
-    # analytical solution, `p` is a tensor not a scalar, since
-    # \sigma \cdot n = p n. Could also find a scalar, but there isn't much
-    # point in this case.
-    p = sigma(u_e, T, T_ref, alpha_L, E, nu)
 
-    u_h = solve(mesh, k, nu, T, T_ref, E, alpha_L, f, p)
+    problem = create_problem_0(mesh)
+
+    u_e = problem["u"]
+
+    # Compute solution at t = 1.5
+    T_expr = problem["T"]
+    T_expr.t = 1.5
+    V = FunctionSpace(mesh, ("Lagrange", k))
+    T = Function(V)
+    T.interpolate(T_expr)
+
+    material = problem["materials"][0]
+    (alpha_L, T_ref) = material["thermal_strain"]
+    nu = material["nu"]
+    E = material["E"]
+
+    f = - ufl.div(sigma(u_e, T, T_ref, alpha_L(T), E(T), nu))
+    # FIXME Make this a scalar
+    p = sigma(u_e, T, T_ref, alpha_L(T), E(T), nu)
+
+    u_h = solve(mesh, k, nu, T, T_ref, E(T), alpha_L(T), f, p)
 
     error_L2 = np.sqrt(mesh.comm.allreduce(assemble_scalar(
         form((u_h - u_e)**2 * ufl.dx)), op=MPI.SUM))

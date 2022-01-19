@@ -107,9 +107,9 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_expr, materials, material_mt,
             expr = bcs[marker]["value"]
             if isinstance(expr, TimeDependentExpression):
                 expr.t = t
-                bc_func.interpolate(bcs[marker]["value"])
-        if isinstance(f, TimeDependentExpression):
-            f.t = t
+                bc_func.interpolate(expr)
+        if isinstance(f_expr, TimeDependentExpression):
+            f_expr.t = t
             f.interpolate(f_expr)
 
         its, converged = solver.solve(T_h)

@@ -132,6 +132,7 @@ def create_problem_0(mesh):
         return ufl.conditional(T > 0.5, 3.5 + T**2, h_poly)
 
     # Think of nicer way to deal with Robin bc
+    # TODO Change "value" to expression
     bcs = [{"type": "robin",
             "value": T_inf,
             "h": h},

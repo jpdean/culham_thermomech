@@ -29,7 +29,7 @@ mu = E / (2.0 * (1.0 + nu))
 lmbda = E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu))
 
 
-def sigma(v):
+def sigma(v, T, T_ref, alpha_L):
     # Elastic strain
     eps_e = ufl.sym(ufl.grad(v))
     eps_T = alpha_L * (T - T_ref) * ufl.Identity(len(v))
@@ -39,14 +39,14 @@ def sigma(v):
 
 u_e = ufl.as_vector((ufl.sin(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1]),
                      ufl.sin(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1])))
-f = - ufl.div(sigma(u_e))
-p_n = ufl.dot(sigma(u_e), ufl.FacetNormal(mesh))
+f = - ufl.div(sigma(u_e, T, T_ref, alpha_L))
+p_n = ufl.dot(sigma(u_e, T, T_ref, alpha_L), ufl.FacetNormal(mesh))
 
 V = VectorFunctionSpace(mesh, ("Lagrange", 1))
 
 u = ufl.TrialFunction(V)
 v = ufl.TestFunction(V)
-F = ufl.inner(sigma(u), ufl.grad(v)) * ufl.dx - \
+F = ufl.inner(sigma(u, T, T_ref, alpha_L), ufl.grad(v)) * ufl.dx - \
     ufl.inner(f, v) * ufl.dx - ufl.inner(p_n, v) * ufl.ds
 a = ufl.lhs(F)
 L = ufl.rhs(F)

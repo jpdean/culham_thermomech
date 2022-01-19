@@ -1,5 +1,7 @@
 # TODO Add nicer problem specification interface.
 
+from mpi4py import MPI
+from dolfinx.mesh import create_unit_square
 import numpy as np
 from dolfinx.mesh import locate_entities_boundary, MeshTags, locate_entities
 import ufl
@@ -100,81 +102,56 @@ def create_problem_0(mesh):
     tdim = mesh.topology.dim
     material_mt = create_mesh_tags(regions, tdim)
 
-    return T, f, materials, material_mt
+    # Boundary conditions
+    neumann_bc = TimeDependentExpression(
+        lambda x, t: np.pi * (np.sin(x[0] * np.pi)**2 *
+                              np.sin(np.pi * t)**2 *
+                              np.cos(x[1] * np.pi)**2 + 4.1) *
+        np.sin(np.pi * t) * np.cos(x[0] * np.pi)
+        * np.cos(x[1] * np.pi))
+
+    T_inf = TimeDependentExpression(
+        lambda x, t: ((np.sin(x[0] * np.pi)**2 * np.sin(np.pi * t)**2 *
+                       np.cos(x[1] * np.pi)**2 + 3.5) * np.sin(x[0] * np.pi)
+                      - np.pi * (np.sin(x[0] * np.pi)**2 *
+                                 np.sin(np.pi * t)**2 * np.cos(x[1] * np.pi)**2 +
+                                 4.1) * np.cos(x[0] * np.pi)) * np.sin(np.pi * t) *
+        np.cos(x[1] * np.pi) /
+        (np.sin(x[0] * np.pi)**2 * np.sin(np.pi * t)**2 *
+         np.cos(x[1] * np.pi)**2 + 3.5))
+
+    def h(T):
+        # Test ufl.conditional works OK for complicated coefficients
+        # which should be approximated with multiple polynomials.
+        # Dummy data representing 2.7 + T**2
+        x = np.array([0.0, 0.25, 0.50, 0.75, 1.0])
+        y = np.array([3.5, 3.5625, 3.75, 4.0625, 4.5])
+        h_poly = ufl_poly_from_table_data(x, y, 2, T)
+        # NOTE For this problem, this will always be false as the solution
+        # is zero on this boundary
+        return ufl.conditional(T > 0.5, 3.5 + T**2, h_poly)
+
+    # Think of nicer way to deal with Robin bc
+    bcs = [{"type": "robin",
+            "value": T_inf,
+            "h": h},
+           {"type": "neumann",
+            "value": neumann_bc},
+           {"type": "dirichlet",
+            "value": T},
+           {"type": "dirichlet",
+            "value": T}]
+
+    boundaries = [lambda x: np.isclose(x[0], 0),
+                  lambda x: np.isclose(x[0], 1),
+                  lambda x: np.isclose(x[1], 0),
+                  lambda x: np.isclose(x[1], 1)]
+
+    bc_mt = create_mesh_tags(boundaries, tdim - 1)
+
+    return T, f, materials, material_mt, bcs, bc_mt
 
 
-from dolfinx.mesh import create_unit_square
-from mpi4py import MPI
 n = 8
 mesh = create_unit_square(MPI.COMM_WORLD, n, n)
 create_problem_0(mesh)
-
-
-class Problem():
-    def materials(self, mesh):
-        # FIXME This code is duplicated for setting BC's. Make function
-
-        return materials, mt
-
-    def bcs(self, mesh):
-        boundaries = [lambda x: np.isclose(x[0], 0),
-                      lambda x: np.isclose(x[0], 1),
-                      lambda x: np.isclose(x[1], 0),
-                      lambda x: np.isclose(x[1], 1)]
-
-        def neumann_bc(x):
-            # NOTE This is just the Neumann BC for the right boundary
-            # TODO Implement with UFL instead?
-            return np.pi * (np.sin(x[0] * np.pi)**2 *
-                            np.sin(np.pi * self.t)**2 *
-                            np.cos(x[1] * np.pi)**2 + 4.1) * \
-                np.sin(np.pi * self.t) * np.cos(x[0] * np.pi) \
-                * np.cos(x[1] * np.pi)
-
-        # Robin BC
-        def T_inf(x):
-            # NOTE This is just the Robin BC (T_inf) for the left boundary
-            return ((np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 *
-                     np.cos(x[1] * np.pi)**2 + 3.5) * np.sin(x[0] * np.pi)
-                    - np.pi * (np.sin(x[0] * np.pi)**2 *
-                    np.sin(np.pi * self.t)**2 * np.cos(x[1] * np.pi)**2 +
-                    4.1) * np.cos(x[0] * np.pi)) * np.sin(np.pi * self.t) * \
-                np.cos(x[1] * np.pi) / \
-                (np.sin(x[0] * np.pi)**2 * np.sin(np.pi * self.t)**2 *
-                    np.cos(x[1] * np.pi)**2 + 3.5)
-
-        def h(T):
-            # Test ufl.conditional works OK for complicated coefficients
-            # which should be approximated with multiple polynomials.
-            # Dummy data representing 2.7 + T**2
-            x = np.array([0.0, 0.25, 0.50, 0.75, 1.0])
-            y = np.array([3.5, 3.5625, 3.75, 4.0625, 4.5])
-            h_poly = ufl_poly_from_table_data(x, y, 2, T)
-            # NOTE For this problem, this will always be false as the solution
-            # is zero on this boundary
-            return ufl.conditional(T > 0.5, 3.5 + T**2, h_poly)
-
-        # Think of nicer way to deal with Robin bc
-        bcs = [{"type": "robin",
-                "value": T_inf,
-               "h": h},
-               {"type": "neumann",
-               "value": neumann_bc},
-               {"type": "dirichlet",
-               "value": self.T},
-               {"type": "dirichlet",
-               "value": self.T}]
-
-        facet_indices, facet_markers = [], []
-        fdim = mesh.topology.dim - 1
-        # Use index in the `boundaries` list as the unique marker
-        for marker, locator in enumerate(boundaries):
-            facets = locate_entities_boundary(mesh, fdim, locator)
-            facet_indices.append(facets)
-            facet_markers.append(np.full(len(facets), marker))
-        facet_indices = np.array(np.hstack(facet_indices), dtype=np.int32)
-        facet_markers = np.array(np.hstack(facet_markers), dtype=np.int32)
-        sorted_facets = np.argsort(facet_indices)
-        mt = MeshTags(mesh, fdim, facet_indices[sorted_facets],
-                      facet_markers[sorted_facets])
-        return bcs, mt

@@ -38,26 +38,26 @@ def test_temporal_convergence():
     assert(np.isclose(r, 1.0, atol=0.1))
 
 
-# def test_spatial_convergence():
-#     t_end = 1.5
-#     num_time_steps = 200
-#     k = 1
-#     problem = Problem()
-#     errors_L2 = []
-#     ns = [8, 16]
+def test_spatial_convergence():
+    t_end = 1.5
+    num_time_steps = 200
+    k = 1
+    errors_L2 = []
+    ns = [8, 16]
 
-#     for i in range(len(ns)):
-#         problem.t = 0
-#         # TODO Use refine rather than create new mesh?
-#         mesh = create_unit_square(MPI.COMM_WORLD, ns[i], ns[i])
-#         T_h = transient_heat.solve(mesh, k, t_end, num_time_steps, problem)
+    for i in range(len(ns)):
+        # TODO Use refine rather than create new mesh?
+        mesh = create_unit_square(MPI.COMM_WORLD, ns[i], ns[i])
+        T, f, materials, material_mt, bcs, bc_mt = create_problem_0(mesh)
+        T_h = transient_heat.solve(mesh, k, t_end, num_time_steps, T, f,
+                                   materials, material_mt, bcs, bc_mt)
 
-#         V_e = fem.FunctionSpace(mesh, ("Lagrange", k + 3))
-#         T_e = fem.Function(V_e)
-#         T_e.interpolate(problem.T)
+        V_e = fem.FunctionSpace(mesh, ("Lagrange", k + 3))
+        T_e = fem.Function(V_e)
+        T_e.interpolate(T)
 
-#         errors_L2.append(compute_error_L2_norm(mesh.comm, T_h, T_e))
+        errors_L2.append(compute_error_L2_norm(mesh.comm, T_h, T_e))
 
-#     r = compute_convergence_rate(errors_L2, ns)
+    r = compute_convergence_rate(errors_L2, ns)
 
-#     assert(np.isclose(r, 2.0, atol=0.1))
+    assert(np.isclose(r, 2.0, atol=0.1))

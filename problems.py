@@ -151,8 +151,3 @@ def create_problem_0(mesh):
     bc_mt = create_mesh_tags(boundaries, tdim - 1)
 
     return T, f, materials, material_mt, bcs, bc_mt
-
-
-n = 8
-mesh = create_unit_square(MPI.COMM_WORLD, n, n)
-create_problem_0(mesh)

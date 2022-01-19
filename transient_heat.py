@@ -132,10 +132,11 @@ def main():
     k = 1
     # TODO Use rectangle mesh
     mesh = create_unit_square(MPI.COMM_WORLD, n, n)
-    T, f, materials, material_mt, bcs, bc_mt = create_problem_0(mesh)
+    problem = create_problem_0(mesh)
 
-    solve(mesh, k, t_end, num_time_steps, T, f, materials, material_mt,
-          bcs, bc_mt)
+    solve(mesh, k, t_end, num_time_steps, problem["T"], problem["f_T"],
+          problem["materials"], problem["material_mt"], problem["bcs"],
+          problem["bc_mt"])
 
 
 if __name__ == "__main__":

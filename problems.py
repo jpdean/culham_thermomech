@@ -81,15 +81,17 @@ def create_problem_0(mesh):
                       "rho": rho,
                       "kappa": kappa,
                       "nu": 0.33,
-                      "E": 1.0 + 0.1 * T**2,
-                      "thermal_strain": (0.1 + 0.01 * T**3, 1.5)})
+                      "E": lambda T: 1.0 + 0.1 * T**2,
+                      "thermal_strain": (lambda T: 0.1 + 0.01 * T**3,
+                                         1.5)})
     materials.append({"name": "mat_2",
                       "c": lambda T: 1.3 + T**2,
                       "rho": lambda T: 2.7 + T**2,
                       "kappa": lambda T: 4.1 + T**2,
                       "nu": 0.33,
-                      "E": 1.0 + 0.1 * T**2,
-                      "thermal_strain": (0.1 + 0.01 * T**3, 1.5)})
+                      "E": lambda T: 1.0 + 0.1 * T**2,
+                      "thermal_strain": (lambda T: 0.1 + 0.01 * T**3,
+                                         1.5)})
 
     def create_mesh_tags(regions, edim):
         entity_indices, entity_markers = [], []

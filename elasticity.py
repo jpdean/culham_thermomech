@@ -51,10 +51,15 @@ F = ufl.inner(sigma(u), ufl.grad(v)) * ufl.dx - \
 a = ufl.lhs(F)
 L = ufl.rhs(F)
 
+
+def dirichlet_boundary(x):
+    return np.logical_or(np.logical_or(np.isclose(x[0], 0.0),
+                                       np.isclose(x[0], 1.0)),
+                         np.isclose(x[1], 0.0))
+
+
 bc = dirichletbc(np.array([0, 0, 0], dtype=PETSc.ScalarType),
-                 locate_dofs_geometrical(V, lambda x: np.logical_or(np.logical_or(np.isclose(x[0], 0.0),
-                                                                                  np.isclose(x[0], 1.0)),
-                                                                    np.isclose(x[1], 0.0))),
+                 locate_dofs_geometrical(V, dirichlet_boundary),
                  V)
 
 problem = LinearProblem(a, L, bcs=[bc], petsc_options={"ksp_type": "preonly",

@@ -14,16 +14,16 @@ from petsc4py import PETSc
 n = 32
 mesh = create_unit_square(MPI.COMM_WORLD, n, n)
 
-# Young's modulus
-E = 1.0
 # Poisson's ratio
 nu = 0.33
 # Thermal expansion coefficient
 # FIXME Do this properly
-alpha_L = 0.1
 T_ref = 1.5
 x = ufl.SpatialCoordinate(mesh)
 T = T_ref + ufl.cos(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1])
+# Young's modulus
+E = 1.0 + 0.1 * T**2
+alpha_L = 0.1 + 0.01 * T**3
 
 
 def sigma(v, T, T_ref, alpha_L):

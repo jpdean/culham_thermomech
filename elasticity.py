@@ -25,15 +25,14 @@ T_ref = 1.5
 x = ufl.SpatialCoordinate(mesh)
 T = T_ref + ufl.cos(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1])
 
-mu = E / (2.0 * (1.0 + nu))
-lmbda = E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu))
-
 
 def sigma(v, T, T_ref, alpha_L):
     # Elastic strain
     eps_e = ufl.sym(ufl.grad(v))
     eps_T = alpha_L * (T - T_ref) * ufl.Identity(len(v))
     eps = eps_e - eps_T
+    mu = E / (2.0 * (1.0 + nu))
+    lmbda = E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu))
     return 2.0 * mu * eps + lmbda * ufl.tr(eps) * ufl.Identity(len(v))
 
 

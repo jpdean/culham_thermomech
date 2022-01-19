@@ -27,10 +27,13 @@ def test_temporal_convergence():
     V_e = fem.FunctionSpace(mesh, ("Lagrange", k + 3))
     T_e = fem.Function(V_e)
     for i in range(len(num_time_steps)):
-        T, f, materials, material_mt, bcs, bc_mt = create_problem_0(mesh)
-        T_h = transient_heat.solve(mesh, k, t_end, num_time_steps[i], T, f,
-                                   materials, material_mt, bcs, bc_mt)
-        T_e.interpolate(T)
+        problem = create_problem_0(mesh)
+        T_h = transient_heat.solve(mesh, k, t_end, num_time_steps[i],
+                                   problem["T"], problem["f_T"],
+                                   problem["materials"],
+                                   problem["material_mt"],
+                                   problem["bcs"], problem["bc_mt"])
+        T_e.interpolate(problem["T"])
         errors_L2.append(compute_error_L2_norm(mesh.comm, T_h, T_e))
 
     r = compute_convergence_rate(errors_L2, num_time_steps)
@@ -48,13 +51,16 @@ def test_spatial_convergence():
     for i in range(len(ns)):
         # TODO Use refine rather than create new mesh?
         mesh = create_unit_square(MPI.COMM_WORLD, ns[i], ns[i])
-        T, f, materials, material_mt, bcs, bc_mt = create_problem_0(mesh)
-        T_h = transient_heat.solve(mesh, k, t_end, num_time_steps, T, f,
-                                   materials, material_mt, bcs, bc_mt)
+        problem = create_problem_0(mesh)
+        T_h = transient_heat.solve(mesh, k, t_end, num_time_steps,
+                                   problem["T"], problem["f_T"],
+                                   problem["materials"],
+                                   problem["material_mt"],
+                                   problem["bcs"], problem["bc_mt"])
 
         V_e = fem.FunctionSpace(mesh, ("Lagrange", k + 3))
         T_e = fem.Function(V_e)
-        T_e.interpolate(T)
+        T_e.interpolate(problem["T"])
 
         errors_L2.append(compute_error_L2_norm(mesh.comm, T_h, T_e))
 

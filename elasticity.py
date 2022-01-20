@@ -1,7 +1,7 @@
 import numpy as np
 
 from dolfinx.fem import (VectorFunctionSpace, dirichletbc,
-                         locate_dofs_geometrical, LinearProblem,
+                         locate_dofs_topological, LinearProblem,
                          FunctionSpace, Function, Constant)
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import create_unit_square
@@ -22,7 +22,7 @@ def sigma(v, T, T_ref, alpha_L, E, nu):
     return 2.0 * mu * eps + lmbda * ufl.tr(eps) * ufl.Identity(len(v))
 
 
-def solve(mesh, k, T, f, p, materials, material_mt):
+def solve(mesh, k, T, f, materials, material_mt, bcs, bc_mt):
     V = VectorFunctionSpace(mesh, ("Lagrange", k))
 
     u = ufl.TrialFunction(V)
@@ -39,20 +39,27 @@ def solve(mesh, k, T, f, p, materials, material_mt):
         F += ufl.inner(
             sigma(u, T, T_ref, alpha_L, E, nu), ufl.grad(v)) * dx(marker)
 
-    F -= ufl.inner(p * ufl.FacetNormal(mesh), v) * ufl.ds
+    ds = ufl.Measure("ds", domain=mesh, subdomain_data=bc_mt)
+
+    dirichlet_bcs = []
+    for marker, bc in enumerate(bcs):
+        bc_type = bc["type"]
+        if bc_type == "dirichlet":
+            facets = np.array(
+                bc_mt.indices[bc_mt.values == marker])
+            dofs = locate_dofs_topological(V, bc_mt.dim, facets)
+            dirichlet_bcs.append(
+                dirichletbc(bc["value"], dofs, V))
+        elif bc_type == "pressure":
+            F -= ufl.inner(bc["value"] * ufl.FacetNormal(mesh), v) * ds(marker)
+        else:
+            raise Exception(
+                f"Boundary condition type {bc_type} not recognised")
+
     a = ufl.lhs(F)
     L = ufl.rhs(F)
 
-    def dirichlet_boundary(x):
-        return np.logical_or(np.logical_or(np.isclose(x[0], 0.0),
-                                           np.isclose(x[0], 1.0)),
-                             np.isclose(x[1], 0.0))
-
-    bc = dirichletbc(np.array([0, 0], dtype=PETSc.ScalarType),
-                     locate_dofs_geometrical(V, dirichlet_boundary),
-                     V)
-
-    problem = LinearProblem(a, L, bcs=[bc],
+    problem = LinearProblem(a, L, bcs=dirichlet_bcs,
                             petsc_options={"ksp_type": "preonly",
                                            "pc_type": "lu"})
     u_h = problem.solve()
@@ -88,10 +95,21 @@ def main():
         [lambda x: x[0] <= 0.5, lambda x: x[0] >= 0.5],
         mesh.topology.dim)
 
-    f = Constant(mesh, np.array([0, -1], dtype=PETSc.ScalarType))
-    p = Constant(mesh, PETSc.ScalarType(-10))
+    bcs = [{"type": "dirichlet",
+            "value": np.array([0, 0], dtype=PETSc.ScalarType)},
+           {"type": "pressure",
+            "value": Constant(mesh, PETSc.ScalarType(-1))}]
+    bc_mt = create_mesh_tags(
+        mesh,
+        [lambda x: np.logical_or(np.logical_or(np.isclose(x[0], 0.0),
+                                               np.isclose(x[0], 1.0)),
+                                 np.isclose(x[1], 0.0)),
+         lambda x: np.isclose(x[1], 1.0)],
+        mesh.topology.dim - 1)
 
-    solve(mesh, k, T, f, p, materials, materials_mt)
+    f = Constant(mesh, np.array([0, -1], dtype=PETSc.ScalarType))
+
+    solve(mesh, k, T, f, materials, materials_mt, bcs, bc_mt)
 
 
 if __name__ == "__main__":

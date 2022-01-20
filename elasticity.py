@@ -23,15 +23,24 @@ def sigma(v, T, T_ref, alpha_L, E, nu):
     return 2.0 * mu * eps + lmbda * ufl.tr(eps) * ufl.Identity(len(v))
 
 
-def solve(mesh, k, nu, T, T_ref, E, alpha_L, f, p):
+def solve(mesh, k, T, f, p, materials, material_mt):
     V = VectorFunctionSpace(mesh, ("Lagrange", k))
 
     u = ufl.TrialFunction(V)
     v = ufl.TestFunction(V)
-    # FIXME Should be p * n, not p \cdot n
-    F = ufl.inner(sigma(u, T, T_ref, alpha_L, E, nu), ufl.grad(v)) * ufl.dx - \
-        ufl.inner(f, v) * ufl.dx - \
-        ufl.inner(p * ufl.FacetNormal(mesh), v) * ufl.ds
+
+    F = - ufl.inner(f, v) * ufl.dx
+
+    dx = ufl.Measure("dx", domain=mesh, subdomain_data=material_mt)
+
+    for marker, mat in enumerate(materials):
+        (alpha_L, T_ref) = mat["thermal_strain"]
+        E = mat["E"]
+        nu = mat["nu"]
+        F += ufl.inner(
+            sigma(u, T, T_ref, alpha_L(T), E(T), nu), ufl.grad(v)) * dx(marker)
+
+    F -= ufl.inner(p * ufl.FacetNormal(mesh), v) * ufl.ds
     a = ufl.lhs(F)
     L = ufl.rhs(F)
 
@@ -83,7 +92,7 @@ def main():
     # a scalar
     p = sigma(u_e, T, T_ref, alpha_L(T), E(T), nu)
 
-    u_h = solve(mesh, k, nu, T, T_ref, E(T), alpha_L(T), f, p)
+    u_h = solve(mesh, k, T, f, p, problem["materials"], problem["material_mt"])
 
     error_L2 = np.sqrt(mesh.comm.allreduce(assemble_scalar(
         form((u_h - u_e)**2 * ufl.dx)), op=MPI.SUM))

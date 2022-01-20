@@ -2,8 +2,7 @@ import numpy as np
 
 from dolfinx.fem import (VectorFunctionSpace, dirichletbc,
                          locate_dofs_geometrical, LinearProblem,
-                         assemble_scalar, form, FunctionSpace,
-                         Function, Constant)
+                         FunctionSpace, Function, Constant)
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import create_unit_square
 import ufl

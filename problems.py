@@ -1,9 +1,7 @@
 # TODO Add nicer problem specification interface.
 
-from mpi4py import MPI
-from dolfinx.mesh import create_unit_square
 import numpy as np
-from dolfinx.mesh import locate_entities_boundary, MeshTags, locate_entities
+from dolfinx.mesh import MeshTags, locate_entities
 import ufl
 
 
@@ -39,10 +37,12 @@ def create_problem_0(mesh):
                                * np.cos(x[1] * np.pi)**2 + 2.7) *
                               np.cos(np.pi * t) + 2 * np.pi *
                               (np.sin(x[0] * np.pi)**2 * np.sin(np.pi * t)**2 *
-                               np.cos(x[1] * np.pi)**2 + 4.1) * np.sin(np.pi * t)
-                              - 2 * np.pi * np.sin(x[0] * np.pi)**2 * np.sin(x[1] *
-                                                                             np.pi)**2 * np.sin(np.pi * t)**3 - 2 * np.pi *
-                              np.sin(np.pi * t)**3 * np.cos(x[0] * np.pi)**2 *
+                               np.cos(x[1] * np.pi)**2 + 4.1) *
+                              np.sin(np.pi * t)
+                              - 2 * np.pi * np.sin(x[0] * np.pi)**2 *
+                              np.sin(x[1] * np.pi)**2 * np.sin(np.pi * t)**3 -
+                              2 * np.pi * np.sin(np.pi * t)**3 *
+                              np.cos(x[0] * np.pi)**2 *
                               np.cos(x[1] * np.pi)**2) * np.sin(x[0] * np.pi) *
         np.cos(x[1] * np.pi))
 
@@ -125,9 +125,10 @@ def create_problem_0(mesh):
         lambda x, t: ((np.sin(x[0] * np.pi)**2 * np.sin(np.pi * t)**2 *
                        np.cos(x[1] * np.pi)**2 + 3.5) * np.sin(x[0] * np.pi)
                       - np.pi * (np.sin(x[0] * np.pi)**2 *
-                                 np.sin(np.pi * t)**2 * np.cos(x[1] * np.pi)**2 +
-                                 4.1) * np.cos(x[0] * np.pi)) * np.sin(np.pi * t) *
-        np.cos(x[1] * np.pi) /
+                                 np.sin(np.pi * t)**2 *
+                                 np.cos(x[1] * np.pi)**2 +
+                                 4.1) * np.cos(x[0] * np.pi)) *
+        np.sin(np.pi * t) * np.cos(x[1] * np.pi) /
         (np.sin(x[0] * np.pi)**2 * np.sin(np.pi * t)**2 *
          np.cos(x[1] * np.pi)**2 + 3.5))
 

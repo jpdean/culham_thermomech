@@ -10,7 +10,8 @@ from dolfinx.nls import NewtonSolver
 
 import ufl
 
-from problems import TimeDependentExpression, create_problem_0
+from problems import (TimeDependentExpression, create_mesh_tags,
+                      ufl_poly_from_table_data)
 
 
 def solve(mesh, k, t_end, num_time_steps, T_i, f_expr, materials, material_mt,
@@ -132,11 +133,61 @@ def main():
     k = 1
     # TODO Use rectangle mesh
     mesh = create_unit_square(MPI.COMM_WORLD, n, n)
-    problem = create_problem_0(mesh)
 
-    solve(mesh, k, t_end, num_time_steps, problem["T"], problem["f_T"],
-          problem["materials"], problem["material_mt"], problem["bcs"],
-          problem["bc_mt"])
+    def T_i(x):
+        return np.zeros_like(x[0])
+
+    f = TimeDependentExpression(
+        lambda x, t: np.sin(np.pi * x[0]) * np.cos(np.pi * x[1]) *
+        np.sin(np.pi * t))
+
+    materials = []
+    # TODO Test ufl_poly_from_table_data for elastic properties
+    materials.append({"name": "mat_1",
+                      "c": lambda T: 1.3 + T**2,
+                      "rho": lambda T: 2.7 + T**2,
+                      "kappa": lambda T: 4.1 + T**2})
+    materials.append({"name": "mat_2",
+                      "c": lambda T: 1.7 + T**2,
+                      "rho": lambda T: 0.7 + 0.1 * T**2,
+                      "kappa": lambda T: 3.2 + 0.6 * T**2})
+    material_mt = create_mesh_tags(
+        mesh,
+        [lambda x: x[0] <= 0.5,
+         lambda x: x[0] >= 0.5],
+        mesh.topology.dim)
+
+    def h(T):
+        # Test ufl.conditional works OK for complicated coefficients
+        # which should be approximated with multiple polynomials.
+        # Dummy data representing 2.7 + T**2
+        x = np.array([0.0, 0.25, 0.50, 0.75, 1.0])
+        y = np.array([3.5, 3.5625, 3.75, 4.0625, 4.5])
+        h_poly = ufl_poly_from_table_data(x, y, 2, T)
+        # NOTE For this problem, this will always be false as the solution
+        # is zero on this boundary
+        return ufl.conditional(T > 0.5, 3.5 + T**2, h_poly)
+
+    bcs = [{"type": "robin",
+            "value": lambda x: 0.1 * np.ones_like(x[0]),
+            "h": h},
+           {"type": "neumann",
+            "value": lambda x: 0.5 * np.ones_like(x[0])},
+           {"type": "dirichlet",
+            "value": lambda x: np.zeros_like(x[0])},
+           {"type": "dirichlet",
+            "value": lambda x: np.zeros_like(x[0])}]
+
+    bc_mt = create_mesh_tags(
+        mesh,
+        [lambda x: np.isclose(x[0], 0),
+         lambda x: np.isclose(x[0], 1),
+         lambda x: np.isclose(x[1], 0),
+         lambda x: np.isclose(x[1], 1)],
+        mesh.topology.dim - 1)
+
+    solve(mesh, k, t_end, num_time_steps, T_i, f, materials, material_mt,
+          bcs, bc_mt)
 
 
 if __name__ == "__main__":

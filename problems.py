@@ -16,6 +16,22 @@ def ufl_poly_from_table_data(x, y, degree, u):
     return poly
 
 
+def create_mesh_tags(mesh, locators, edim):
+    entity_indices, entity_markers = [], []
+    # Use index in the `regions` list as the unique marker
+    for marker, locator in enumerate(locators):
+        # TODO Use locate_entities_boundary for boundaries?
+        entities = locate_entities(mesh, edim, locator)
+        entity_indices.append(entities)
+        entity_markers.append(np.full(len(entities), marker))
+    entity_indices = np.array(np.hstack(entity_indices), dtype=np.int32)
+    entity_markers = np.array(np.hstack(entity_markers), dtype=np.int32)
+    sorted_entities = np.argsort(entity_indices)
+    mt = MeshTags(mesh, edim, entity_indices[sorted_entities],
+                  entity_markers[sorted_entities])
+    return mt
+
+
 class TimeDependentExpression():
     def __init__(self, expression):
         self.t = 0
@@ -93,25 +109,10 @@ def create_problem_0(mesh):
                       "thermal_strain": (lambda T: 0.1 + 0.01 * T**3,
                                          1.5)})
 
-    def create_mesh_tags(regions, edim):
-        entity_indices, entity_markers = [], []
-        # Use index in the `regions` list as the unique marker
-        for marker, locator in enumerate(regions):
-            # TODO Use locate_entities_boundary for boundaries?
-            entities = locate_entities(mesh, edim, locator)
-            entity_indices.append(entities)
-            entity_markers.append(np.full(len(entities), marker))
-        entity_indices = np.array(np.hstack(entity_indices), dtype=np.int32)
-        entity_markers = np.array(np.hstack(entity_markers), dtype=np.int32)
-        sorted_entities = np.argsort(entity_indices)
-        mt = MeshTags(mesh, edim, entity_indices[sorted_entities],
-                      entity_markers[sorted_entities])
-        return mt
-
     regions = [lambda x: x[0] <= 0.5,
                lambda x: x[0] >= 0.5]
     tdim = mesh.topology.dim
-    material_mt = create_mesh_tags(regions, tdim)
+    material_mt = create_mesh_tags(mesh, regions, tdim)
 
     # Boundary conditions
     neumann_bc = TimeDependentExpression(
@@ -160,7 +161,7 @@ def create_problem_0(mesh):
                   lambda x: np.isclose(x[1], 0),
                   lambda x: np.isclose(x[1], 1)]
 
-    bc_mt = create_mesh_tags(boundaries, tdim - 1)
+    bc_mt = create_mesh_tags(mesh, boundaries, tdim - 1)
 
     return {"T": T,
             "u": u,

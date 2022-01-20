@@ -3,14 +3,14 @@ import numpy as np
 from dolfinx.fem import (VectorFunctionSpace, dirichletbc,
                          locate_dofs_geometrical, LinearProblem,
                          assemble_scalar, form, FunctionSpace,
-                         Function)
+                         Function, Constant)
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import create_unit_square
 import ufl
 
 from mpi4py import MPI
 from petsc4py import PETSc
-from problems import create_problem_0
+from problems import create_mesh_tags
 
 
 def sigma(v, T, T_ref, alpha_L, E, nu):
@@ -38,7 +38,7 @@ def solve(mesh, k, T, f, p, materials, material_mt):
         E = mat["E"]
         nu = mat["nu"]
         F += ufl.inner(
-            sigma(u, T, T_ref, alpha_L(T), E(T), nu), ufl.grad(v)) * dx(marker)
+            sigma(u, T, T_ref, alpha_L, E, nu), ufl.grad(v)) * dx(marker)
 
     F -= ufl.inner(p * ufl.FacetNormal(mesh), v) * ufl.ds
     a = ufl.lhs(F)
@@ -49,7 +49,7 @@ def solve(mesh, k, T, f, p, materials, material_mt):
                                            np.isclose(x[0], 1.0)),
                              np.isclose(x[1], 0.0))
 
-    bc = dirichletbc(np.array([0, 0, 0], dtype=PETSc.ScalarType),
+    bc = dirichletbc(np.array([0, 0], dtype=PETSc.ScalarType),
                      locate_dofs_geometrical(V, dirichlet_boundary),
                      V)
 
@@ -71,33 +71,28 @@ def main():
     k = 1
     mesh = create_unit_square(MPI.COMM_WORLD, n, n)
 
-    problem = create_problem_0(mesh)
-
-    u_e = problem["u"]
-
-    # Compute solution at t = 1.5
-    T_expr = problem["T"]
-    T_expr.t = 1.5
     V = FunctionSpace(mesh, ("Lagrange", k))
     T = Function(V)
-    T.interpolate(T_expr)
+    T.interpolate(lambda x: np.sin(np.pi * x[0]) * np.cos(np.pi * x[1]) + 1)
 
-    material = problem["materials"][0]
-    (alpha_L, T_ref) = material["thermal_strain"]
-    nu = material["nu"]
-    E = material["E"]
+    materials = []
+    materials.append({"name": "mat_1",
+                      "nu": 0.33,
+                      "E": 1.0 + 0.1 * T**2,
+                      "thermal_strain": (0.1 + 0.01 * T**3, 1.5)})
+    materials.append({"name": "mat_2",
+                      "nu": 0.33,
+                      "E": 1.0 + 0.1 * T**2,
+                      "thermal_strain": (0.1 + 0.01 * T**3, 1.5)})
+    materials_mt = create_mesh_tags(
+        mesh,
+        [lambda x: x[0] <= 0.5, lambda x: x[0] >= 0.5],
+        mesh.topology.dim)
 
-    f = - ufl.div(sigma(u_e, T, T_ref, alpha_L(T), E(T), nu))
-    # NOTE p here is a rank 2 tensor for convenience, rather than
-    # a scalar
-    p = sigma(u_e, T, T_ref, alpha_L(T), E(T), nu)
+    f = Constant(mesh, np.array([0, -1], dtype=PETSc.ScalarType))
+    p = Constant(mesh, PETSc.ScalarType(-10))
 
-    u_h = solve(mesh, k, T, f, p, problem["materials"], problem["material_mt"])
-
-    error_L2 = np.sqrt(mesh.comm.allreduce(assemble_scalar(
-        form((u_h - u_e)**2 * ufl.dx)), op=MPI.SUM))
-    if mesh.comm.Get_rank() == 0:
-        print(error_L2)
+    solve(mesh, k, T, f, p, materials, materials_mt)
 
 
 if __name__ == "__main__":

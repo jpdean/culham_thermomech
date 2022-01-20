@@ -31,7 +31,7 @@ def solve(mesh, k, nu, T, T_ref, E, alpha_L, f, p):
     # FIXME Should be p * n, not p \cdot n
     F = ufl.inner(sigma(u, T, T_ref, alpha_L, E, nu), ufl.grad(v)) * ufl.dx - \
         ufl.inner(f, v) * ufl.dx - \
-        ufl.inner(ufl.dot(p, ufl.FacetNormal(mesh)), v) * ufl.ds
+        ufl.inner(p * ufl.FacetNormal(mesh), v) * ufl.ds
     a = ufl.lhs(F)
     L = ufl.rhs(F)
 
@@ -79,7 +79,8 @@ def main():
     E = material["E"]
 
     f = - ufl.div(sigma(u_e, T, T_ref, alpha_L(T), E(T), nu))
-    # FIXME Make this a scalar
+    # NOTE p here is a rank 2 tensor for convenience, rather than
+    # a scalar
     p = sigma(u_e, T, T_ref, alpha_L(T), E(T), nu)
 
     u_h = solve(mesh, k, nu, T, T_ref, E(T), alpha_L(T), f, p)

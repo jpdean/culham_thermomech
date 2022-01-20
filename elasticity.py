@@ -87,9 +87,9 @@ def main():
                       "E": 1.0 + 0.1 * T**2,
                       "thermal_strain": (0.1 + 0.01 * T**3, 1.5)})
     materials.append({"name": "mat_2",
-                      "nu": 0.33,
-                      "E": 1.0 + 0.1 * T**2,
-                      "thermal_strain": (0.1 + 0.01 * T**3, 1.5)})
+                      "nu": 0.1,
+                      "E": 1.0 + 0.5 * T**2,
+                      "thermal_strain": (0.2 + 0.015 * T**2, 1.0)})
     materials_mt = create_mesh_tags(
         mesh,
         [lambda x: x[0] <= 0.5, lambda x: x[0] >= 0.5],

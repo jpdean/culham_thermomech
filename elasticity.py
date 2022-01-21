@@ -1,8 +1,9 @@
 import numpy as np
 
 from dolfinx.fem import (VectorFunctionSpace, dirichletbc,
-                         locate_dofs_topological, LinearProblem,
-                         FunctionSpace, Function, Constant)
+                         locate_dofs_topological, FunctionSpace, Function,
+                         Constant, form, assemble_matrix, assemble_vector,
+                         apply_lifting, set_bc)
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import create_unit_square
 import ufl
@@ -56,14 +57,28 @@ def solve(mesh, k, T, f, materials, material_mt, bcs, bc_mt):
             raise Exception(
                 f"Boundary condition type {bc_type} not recognised")
 
-    a = ufl.lhs(F)
-    L = ufl.rhs(F)
+    a = form(ufl.lhs(F))
+    L = form(ufl.rhs(F))
 
-    problem = LinearProblem(a, L, bcs=dirichlet_bcs,
-                            petsc_options={"ksp_type": "preonly",
-                                           "pc_type": "lu"})
-    u_h = problem.solve()
+    A = assemble_matrix(a, bcs=dirichlet_bcs)
+    A.assemble()
+
+    b = assemble_vector(L)
+    apply_lifting(b, [a], bcs=[dirichlet_bcs])
+    b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+    set_bc(b, dirichlet_bcs)
+
+    ksp = PETSc.KSP().create(MPI.COMM_WORLD)
+
+    # Set matrix operator
+    ksp.setOperators(A)
+
+    # Compute solution
+    # solver.setMonitor(lambda ksp, its, rnorm: print("Iteration: {}, rel. residual: {}".format(its, rnorm)))
+    u_h = Function(V)
     u_h.name = "u"
+    ksp.solve(b, u_h.vector)
+    # solver.view()
 
     with XDMFFile(MPI.COMM_WORLD, "u.xdmf", "w") as file:
         file.write_mesh(mesh)

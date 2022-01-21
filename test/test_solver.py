@@ -5,7 +5,8 @@ from dolfinx import fem
 import ufl
 import numpy as np
 from problems import (TimeDependentExpression, create_mesh_tags,
-                      ufl_poly_from_table_data)
+                      ufl_poly_from_table_data, compute_error_L2_norm,
+                      compute_convergence_rate)
 
 
 T_expr = TimeDependentExpression(lambda x, t:
@@ -135,16 +136,6 @@ def get_bc_mt(mesh):
                   lambda x: np.isclose(x[1], 0),
                   lambda x: np.isclose(x[1], 1)]
     return create_mesh_tags(mesh, boundaries, mesh.topology.dim - 1)
-
-
-def compute_error_L2_norm(comm, T_h, T_e):
-    return np.sqrt(comm.allreduce(
-        fem.assemble_scalar(fem.form((T_h - T_e)**2 * ufl.dx)), op=MPI.SUM))
-
-
-def compute_convergence_rate(errors_L2, ns):
-    return np.log(errors_L2[-1] / errors_L2[-2]) / \
-        np.log(ns[-2] / ns[-1])
 
 
 def test_temporal_convergence():

@@ -6,11 +6,60 @@ from dolfinx.fem import (VectorFunctionSpace, dirichletbc,
                          apply_lifting, set_bc)
 from dolfinx.io import XDMFFile
 from dolfinx.mesh import create_unit_square
+from dolfinx import la
 import ufl
 
 from mpi4py import MPI
 from petsc4py import PETSc
 from problems import create_mesh_tags
+
+from contextlib import ExitStack
+
+
+def build_nullspace(V):
+    # TODO This can be simplified
+    """Function to build PETSc nullspace for 2D and 3D elasticity"""
+
+    d = V.mesh.topology.dim
+
+    # Create list of vectors for null space
+    index_map = V.dofmap.index_map
+    bs = V.dofmap.index_map_bs
+    if d == 2:
+        num_basis_vecs = 3
+    else:
+        assert(d == 3)
+        num_basis_vecs = 6
+    ns = [la.create_petsc_vector(index_map, bs) for i in range(num_basis_vecs)]
+    with ExitStack() as stack:
+        vec_local = [stack.enter_context(x.localForm()) for x in ns]
+        basis = [np.asarray(x) for x in vec_local]
+
+        # Get dof indices for each subspace
+        dofs = [V.sub(i).dofmap.list.array for i in range(d)]
+
+        # Build translational nullspace basis
+        for i in range(d):
+            basis[i][dofs[i]] = 1.0
+
+        # Build rotational nullspace basis
+        x = V.tabulate_dof_coordinates()
+        dofs_block = V.dofmap.list.array
+        x0 = x[dofs_block, 0]
+        x1 = x[dofs_block, 1]
+        basis[d][dofs[0]] = -x1
+        basis[d][dofs[1]] = x0
+
+        if d == 3:
+            x2 = x[dofs_block, 2]
+            basis[d + 1][dofs[0]] = x2
+            basis[d + 1][dofs[2]] = -x0
+            basis[d + 2][dofs[2]] = x1
+            basis[d + 2][dofs[1]] = -x2
+
+    la.orthonormalize(ns)
+    assert la.is_orthonormal(ns)
+    return PETSc.NullSpace().create(vectors=ns)
 
 
 def sigma(v, T, T_ref, alpha_L, E, nu):
@@ -75,7 +124,8 @@ def solve(mesh, k, T, f, materials, material_mt, bcs, bc_mt,
     ksp.setOperators(A)
 
     if use_iterative_solver:
-        # TODO Set nullspace
+        null_space = build_nullspace(V)
+        A.setNearNullSpace(null_space)
         opts = PETSc.Options()
         opts["ksp_type"] = "cg"
         opts["ksp_rtol"] = 1.0e-12

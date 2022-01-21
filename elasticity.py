@@ -37,7 +37,7 @@ def solve(mesh, k, T, f, materials, material_mt, bcs, bc_mt):
         E = mat["E"]
         nu = mat["nu"]
         F += ufl.inner(
-            sigma(u, T, T_ref, alpha_L, E, nu), ufl.grad(v)) * dx(marker)
+            sigma(u, T, T_ref, alpha_L(T), E(T), nu), ufl.grad(v)) * dx(marker)
 
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=bc_mt)
 
@@ -84,12 +84,12 @@ def main():
     materials = []
     materials.append({"name": "mat_1",
                       "nu": 0.33,
-                      "E": 1.0 + 0.1 * T**2,
-                      "thermal_strain": (0.1 + 0.01 * T**3, 1.5)})
+                      "E": lambda T: 1.0 + 0.1 * T**2,
+                      "thermal_strain": (lambda T: 0.1 + 0.01 * T**3, 1.5)})
     materials.append({"name": "mat_2",
                       "nu": 0.1,
-                      "E": 1.0 + 0.5 * T**2,
-                      "thermal_strain": (0.2 + 0.015 * T**2, 1.0)})
+                      "E": lambda T: 1.0 + 0.5 * T**2,
+                      "thermal_strain": (lambda T: 0.2 + 0.015 * T**2, 1.0)})
     materials_mt = create_mesh_tags(
         mesh,
         [lambda x: x[0] <= 0.5, lambda x: x[0] >= 0.5],

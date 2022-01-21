@@ -2,7 +2,9 @@
 
 import numpy as np
 from dolfinx.mesh import MeshTags, locate_entities
+from dolfinx import fem
 import ufl
+from mpi4py import MPI
 
 
 def ufl_poly_from_table_data(x, y, degree, u):
@@ -39,6 +41,16 @@ class TimeDependentExpression():
 
     def __call__(self, x):
         return self.expression(x, self.t)
+
+
+def compute_error_L2_norm(comm, v_h, v):
+    return np.sqrt(comm.allreduce(
+        fem.assemble_scalar(fem.form((v_h - v)**2 * ufl.dx)), op=MPI.SUM))
+
+
+def compute_convergence_rate(errors_L2, ns):
+    return np.log(errors_L2[-1] / errors_L2[-2]) / \
+        np.log(ns[-2] / ns[-1])
 
 
 def create_problem_0(mesh):

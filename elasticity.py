@@ -23,7 +23,8 @@ def sigma(v, T, T_ref, alpha_L, E, nu):
     return 2.0 * mu * eps + lmbda * ufl.tr(eps) * ufl.Identity(len(v))
 
 
-def solve(mesh, k, T, f, materials, material_mt, bcs, bc_mt):
+def solve(mesh, k, T, f, materials, material_mt, bcs, bc_mt,
+          use_iterative_solver=True):
     V = VectorFunctionSpace(mesh, ("Lagrange", k))
 
     u = ufl.TrialFunction(V)
@@ -72,13 +73,30 @@ def solve(mesh, k, T, f, materials, material_mt, bcs, bc_mt):
 
     # Set matrix operator
     ksp.setOperators(A)
-    ksp.setType(PETSc.KSP.Type.PREONLY)
-    ksp.getPC().setType(PETSc.PC.Type.LU)
+
+    if use_iterative_solver:
+        # TODO Set nullspace
+        opts = PETSc.Options()
+        opts["ksp_type"] = "cg"
+        opts["ksp_rtol"] = 1.0e-12
+        opts["pc_type"] = "gamg"
+
+        # Use Chebyshev smoothing for multigrid
+        opts["mg_levels_ksp_type"] = "chebyshev"
+        opts["mg_levels_pc_type"] = "jacobi"
+
+        # Improve estimate of eigenvalues for Chebyshev smoothing
+        opts["mg_levels_esteig_ksp_type"] = "cg"
+        opts["mg_levels_ksp_chebyshev_esteig_steps"] = 20
+        ksp.setFromOptions()
+    else:
+        ksp.setType(PETSc.KSP.Type.PREONLY)
+        ksp.getPC().setType(PETSc.PC.Type.LU)
 
     # Compute solution
-    # ksp.setMonitor(
-    #     lambda ksp, its, rnorm:
-    #     print("Iteration: {}, rel. residual: {}".format(its, rnorm)))
+    ksp.setMonitor(
+        lambda ksp, its, rnorm:
+        print("Iteration: {}, rel. residual: {}".format(its, rnorm)))
     u_h = Function(V)
     u_h.name = "u"
     ksp.solve(b, u_h.vector)

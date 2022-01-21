@@ -150,6 +150,7 @@ def solve(mesh, k, T, f, materials, material_mt, bcs, bc_mt,
     u_h = Function(V)
     u_h.name = "u"
     ksp.solve(b, u_h.vector)
+    u_h.x.scatter_forward()
     # ksp.view()
 
     with XDMFFile(MPI.COMM_WORLD, "u.xdmf", "w") as file:

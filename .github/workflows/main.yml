@@ -37,7 +37,12 @@ jobs:
         run: mpirun -np 3 python3 -m pytest .
 
       # Runs a set of commands using the runners shell
-      # - name: Run a multi-line script
-      #   run: |
-      #     echo Add other actions to build,
-      #     echo test, and deploy your project.
+      - name: Run demos in serial
+        run: |
+          python3 transient_heat.py
+          python3 elasticity.py
+
+      - name: Run demos in parallel
+        run: |
+          mpirun -n 3 python3 transient_heat.py
+          mpirun -n 3 python3 elasticity.py

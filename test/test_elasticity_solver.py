@@ -31,44 +31,45 @@ materials.append({"name": "mat_2",
                   "thermal_strain": (alpha_L, T_ref)})
 
 
-errors_L2 = []
-for n in ns:
-    mesh = create_unit_square(MPI.COMM_WORLD, n, n)
+def test_elastic_solver():
+    errors_L2 = []
+    for n in ns:
+        mesh = create_unit_square(MPI.COMM_WORLD, n, n)
 
-    x = ufl.SpatialCoordinate(mesh)
-    u = ufl.as_vector((ufl.sin(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1]),
-                       ufl.sin(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1])))
+        x = ufl.SpatialCoordinate(mesh)
+        u = ufl.as_vector((ufl.sin(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1]),
+                        ufl.sin(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1])))
 
-    V = FunctionSpace(mesh, ("Lagrange", k))
-    T = Function(V)
-    T.interpolate(lambda x: np.sin(np.pi * x[0]) * np.cos(np.pi * x[1]) + 1)
+        V = FunctionSpace(mesh, ("Lagrange", k))
+        T = Function(V)
+        T.interpolate(lambda x: np.sin(np.pi * x[0]) * np.cos(np.pi * x[1]) + 1)
 
-    f = - ufl.div(elasticity.sigma(u, T, T_ref, alpha_L(T), E(T), nu))
+        f = - ufl.div(elasticity.sigma(u, T, T_ref, alpha_L(T), E(T), nu))
 
-    # NOTE p here is a rank 2 tensor for convenience, rather than
-    # a scalar
-    p = elasticity.sigma(u, T, T_ref, alpha_L(T), E(T), nu)
-    bcs = [{"type": "dirichlet",
-            "value": np.array([0, 0], dtype=PETSc.ScalarType)},
-           {"type": "pressure",
-            "value": p}]
-    bc_mt = create_mesh_tags(
-        mesh,
-        [lambda x: np.logical_or(np.logical_or(np.isclose(x[0], 0.0),
-                                               np.isclose(x[0], 1.0)),
-                                 np.isclose(x[1], 0.0)),
-            lambda x: np.isclose(x[1], 1.0)],
-        mesh.topology.dim - 1)
+        # NOTE p here is a rank 2 tensor for convenience, rather than
+        # a scalar
+        p = elasticity.sigma(u, T, T_ref, alpha_L(T), E(T), nu)
+        bcs = [{"type": "dirichlet",
+                "value": np.array([0, 0], dtype=PETSc.ScalarType)},
+            {"type": "pressure",
+                "value": p}]
+        bc_mt = create_mesh_tags(
+            mesh,
+            [lambda x: np.logical_or(np.logical_or(np.isclose(x[0], 0.0),
+                                                np.isclose(x[0], 1.0)),
+                                    np.isclose(x[1], 0.0)),
+                lambda x: np.isclose(x[1], 1.0)],
+            mesh.topology.dim - 1)
 
-    materials_mt = create_mesh_tags(
-        mesh,
-        [lambda x: x[0] <= 0.5, lambda x: x[0] >= 0.5],
-        mesh.topology.dim)
+        materials_mt = create_mesh_tags(
+            mesh,
+            [lambda x: x[0] <= 0.5, lambda x: x[0] >= 0.5],
+            mesh.topology.dim)
 
-    u_h = elasticity.solve(mesh, k, T, f, materials, materials_mt, bcs, bc_mt)
+        u_h = elasticity.solve(mesh, k, T, f, materials, materials_mt, bcs, bc_mt)
 
-    errors_L2.append(compute_error_L2_norm(mesh.comm, u_h, u))
+        errors_L2.append(compute_error_L2_norm(mesh.comm, u_h, u))
 
-r = compute_convergence_rate(errors_L2, ns)
+    r = compute_convergence_rate(errors_L2, ns)
 
-assert(np.isclose(r, k + 1, atol=0.1))
+    assert(np.isclose(r, k + 1, atol=0.1))

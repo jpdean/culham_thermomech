@@ -72,13 +72,17 @@ def solve(mesh, k, T, f, materials, material_mt, bcs, bc_mt):
 
     # Set matrix operator
     ksp.setOperators(A)
+    ksp.setType(PETSc.KSP.Type.PREONLY)
+    ksp.getPC().setType(PETSc.PC.Type.LU)
 
     # Compute solution
-    # solver.setMonitor(lambda ksp, its, rnorm: print("Iteration: {}, rel. residual: {}".format(its, rnorm)))
+    # ksp.setMonitor(
+    #     lambda ksp, its, rnorm:
+    #     print("Iteration: {}, rel. residual: {}".format(its, rnorm)))
     u_h = Function(V)
     u_h.name = "u"
     ksp.solve(b, u_h.vector)
-    # solver.view()
+    # ksp.view()
 
     with XDMFFile(MPI.COMM_WORLD, "u.xdmf", "w") as file:
         file.write_mesh(mesh)

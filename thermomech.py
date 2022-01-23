@@ -205,7 +205,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, materials,
 
 
 def main():
-    t_end = 1
+    t_end = 0.01
     num_time_steps = 20
     n = 16
     k = 1
@@ -216,10 +216,9 @@ def main():
     def T_i(x):
         return np.zeros_like(x[0])
 
-    # f_T_expr = TimeDependentExpression(
-    #     lambda x, t: np.sin(np.pi * x[0]) * np.cos(np.pi * x[1]) *
-    #     np.sin(np.pi * t))
-    def f_T_expr(x): return 10 * np.ones_like(x[0])
+    f_T_expr = TimeDependentExpression(
+        lambda x, t: np.sin(np.pi * x[0]) * np.cos(np.pi * x[1]) *
+        np.sin(np.pi * t))
 
     materials = []
     # TODO Test ufl_poly_from_table_data for elastic properties
@@ -229,14 +228,14 @@ def main():
                       "kappa": lambda T: 4.1 + T**2,
                       "nu": 0.33,
                       "E": lambda T: 1.0 + 0.1 * T**2,
-                      "thermal_strain": (lambda T: 0, 0)})
+                      "thermal_strain": (lambda T: 0.1 + 0.01 * T**3, 1.5)})
     materials.append({"name": "mat_2",
                       "c": lambda T: 1.7 + T**2,
                       "rho": lambda T: 0.7 + 0.1 * T**2,
                       "kappa": lambda T: 3.2 + 0.6 * T**2,
                       "nu": 0.1,
                       "E": lambda T: 1.0 + 0.5 * T**2,
-                      "thermal_strain": (lambda T: 0, 0)})
+                      "thermal_strain": (lambda T: 0.2 + 0.015 * T**2, 1.0)})
     material_mt = create_mesh_tags(
         mesh,
         [lambda x: x[0] <= 0.5,
@@ -255,27 +254,27 @@ def main():
         return ufl.conditional(T > 0.5, 3.5 + T**2, h_poly)
 
     bcs = [{"type": "convection",
-            "value": lambda x: 0.0 * np.ones_like(x[0]),
+            "value": lambda x: 0.1 * np.ones_like(x[0]),
             "h": h},
            {"type": "heat_flux",
-            "value": lambda x: 0.0 * np.ones_like(x[0])},
+            "value": lambda x: 0.5 * np.ones_like(x[0])},
            {"type": "temperature",
             "value": lambda x: np.zeros_like(x[0])},
            {"type": "displacement",
             "value": np.array([0, 0], dtype=PETSc.ScalarType)},
            {"type": "pressure",
-            "value": fem.Constant(mesh, PETSc.ScalarType(0))}]
+            "value": fem.Constant(mesh, PETSc.ScalarType(-1))}]
 
     bc_mt = create_mesh_tags(
         mesh,
         [lambda x: np.logical_or(np.isclose(x[1], 0), np.isclose(x[1], 1)),
          lambda x: np.isclose(x[2], 1),
-         lambda x: np.isclose(x[0], 2),
+         lambda x: np.isclose(x[0], 0),
          lambda x: np.isclose(x[0], 0),
          lambda x: np.isclose(x[2], 1.0)],
         mesh.topology.dim - 1)
 
-    f_u = fem.Constant(mesh, np.array([0, 0, -0.01], dtype=PETSc.ScalarType))
+    f_u = fem.Constant(mesh, np.array([0, 0, -1], dtype=PETSc.ScalarType))
 
     solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, materials,
           material_mt, bcs, bc_mt)

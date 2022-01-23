@@ -179,6 +179,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, materials,
         T_h.x.scatter_forward()
         assert(converged)
 
+        A_u.zeroEntries()
         fem.assemble_matrix(A_u, a_u, bcs=dirichlet_bcs_u)
         A_u.assemble()
         with b_u.localForm() as b_u_loc:

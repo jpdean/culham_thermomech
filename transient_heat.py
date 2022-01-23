@@ -1,3 +1,4 @@
+from ast import Constant
 import numpy as np
 
 from mpi4py import MPI
@@ -14,6 +15,10 @@ from problems import (TimeDependentExpression, create_mesh_tags,
                       ufl_poly_from_table_data)
 
 
+def to_theta(v, v_n, theta):
+    return (1 - theta) * v_n + theta * v
+
+
 def solve(mesh, k, t_end, num_time_steps, T_i, f_expr, materials, material_mt,
           bcs, bc_mt, use_iterative_solver=True):
     t = 0.0
@@ -25,6 +30,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_expr, materials, material_mt,
     xdmf_file = XDMFFile(MPI.COMM_WORLD, "T.xdmf", "w")
     xdmf_file.write_mesh(mesh)
 
+    # FIXME Could just interpolate T_n and f_n
     T_h = fem.Function(V)
     T_h.name = "T"
     T_h.interpolate(T_i)
@@ -33,22 +39,29 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_expr, materials, material_mt,
     T_n = fem.Function(V)
     T_n.x.array[:] = T_h.x.array
 
+    # theta = Constant(mesh, PETSc.ScalarType(0.5))
+    theta = 0.5
+    T_theta = to_theta(T_h, T_n, theta)
+
     v = ufl.TestFunction(V)
 
     f = fem.Function(V)
     f.interpolate(f_expr)
+    f_n = fem.Function(V)
+    f_n.x.array[:] = f.x.array
+    f_theta = to_theta(f, f_n, theta)
 
-    F = - ufl.inner(delta_t * f, v) * ufl.dx
+    F = - ufl.inner(delta_t * f_theta, v) * ufl.dx
 
     dx = ufl.Measure("dx", domain=mesh, subdomain_data=material_mt)
 
     # FIXME I think this creates a new kernel for every material
     for marker, mat in enumerate(materials):
-        c = mat["c"](T_h)
-        rho = mat["rho"](T_h)
-        kappa = mat["kappa"](T_h)
+        c = mat["c"](T_theta)
+        rho = mat["rho"](T_theta)
+        kappa = mat["kappa"](T_theta)
         F += ufl.inner(rho * c * T_h, v) * dx(marker) + \
-            delta_t * ufl.inner(kappa * ufl.grad(T_h),
+            delta_t * ufl.inner(kappa * ufl.grad(T_theta),
                                 ufl.grad(v)) * dx(marker) - \
             ufl.inner(rho * c * T_n, v) * dx(marker)
 
@@ -58,7 +71,9 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_expr, materials, material_mt,
     for bc in bcs:
         func = fem.Function(V)
         func.interpolate(bc["value"])
-        bc_funcs.append(func)
+        func_n = fem.Function(V)
+        func_n.x.array[:] = func.x.array
+        bc_funcs.append((func, func_n))
 
     dirichlet_bcs = []
     # FIXME Make types enums
@@ -68,14 +83,22 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_expr, materials, material_mt,
             facets = np.array(
                 bc_mt.indices[bc_mt.values == marker])
             dofs = fem.locate_dofs_topological(V, bc_mt.dim, facets)
+            # bc_func_theta = to_theta(bc_funcs[marker][0],
+            #                          bc_funcs[marker][1],
+            #                          theta)
             dirichlet_bcs.append(
-                fem.dirichletbc(bc_funcs[marker], dofs))
+                fem.dirichletbc(bc_funcs[marker][0], dofs))
         elif bc_type == "neumann":
-            F -= delta_t * ufl.inner(bc_funcs[marker], v) * ds(marker)
+            bc_func_theta = to_theta(bc_funcs[marker][0],
+                                     bc_funcs[marker][1],
+                                     theta)
+            F -= delta_t * ufl.inner(bc_func_theta, v) * ds(marker)
         elif bc_type == "robin":
-            T_inf = bc_funcs[marker]
-            h = bc["h"](T_h)
-            F += delta_t * ufl.inner(h * (T_h - T_inf), v) * ds(marker)
+            T_inf_theta = to_theta(bc_funcs[marker][0],
+                                   bc_funcs[marker][1],
+                                   theta)
+            h = bc["h"](T_theta)
+            F += delta_t * ufl.inner(h * (T_theta - T_inf_theta), v) * ds(marker)
         else:
             raise Exception(
                 f"Boundary condition type {bc_type} not recognised")
@@ -108,7 +131,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_expr, materials, material_mt,
             expr = bcs[marker]["value"]
             if isinstance(expr, TimeDependentExpression):
                 expr.t = t
-                bc_func.interpolate(expr)
+                bc_func[0].interpolate(expr)
         if isinstance(f_expr, TimeDependentExpression):
             f_expr.t = t
             f.interpolate(f_expr)
@@ -118,6 +141,8 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_expr, materials, material_mt,
         assert(converged)
 
         T_n.x.array[:] = T_h.x.array
+        for marker, bc_func in enumerate(bc_funcs):
+            bc_func[1].x.array[:] = bc_func[0].x.array
 
         xdmf_file.write_function(T_h, t)
 

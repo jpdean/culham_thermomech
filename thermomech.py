@@ -139,46 +139,60 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, materials,
     u_h.x.scatter_forward()
     xdmf_file.write_function(u_h, t)
 
-    # non_lin_problem = fem.NonlinearProblem(F_T, T_h, dirichlet_bcs_T)
-    # solver = NewtonSolver(MPI.COMM_WORLD, non_lin_problem)
-    # solver.convergence_criterion = "incremental"
-    # solver.rtol = 1e-6
-    # solver.report = True
+    non_lin_problem = fem.NonlinearProblem(F_T, T_h, dirichlet_bcs_T)
+    solver = NewtonSolver(MPI.COMM_WORLD, non_lin_problem)
+    solver.convergence_criterion = "incremental"
+    solver.rtol = 1e-6
+    solver.report = True
 
-    # ksp_T = solver.krylov_solver
+    ksp_T = solver.krylov_solver
 
-    # if use_iterative_solver:
-    #     # NOTE May need to use GMRES as matrix isn't symmetric due to
-    #     # non-linearity
-    #     ksp_T.setType(PETSc.KSP.Type.CG)
-    #     ksp_T.setTolerances(rtol=1.0e-12)
-    #     ksp_T.getPC().setType(PETSc.PC.Type.HYPRE)
-    #     ksp_T.getPC().setHYPREType("boomeramg")
-    # else:
-    #     ksp_T.setType(PETSc.KSP.Type.PREONLY)
-    #     ksp_T.getPC().setType(PETSc.PC.Type.LU)
+    if use_iterative_solver:
+        # NOTE May need to use GMRES as matrix isn't symmetric due to
+        # non-linearity
+        ksp_T.setType(PETSc.KSP.Type.CG)
+        ksp_T.setTolerances(rtol=1.0e-12)
+        ksp_T.getPC().setType(PETSc.PC.Type.HYPRE)
+        ksp_T.getPC().setHYPREType("boomeramg")
+    else:
+        ksp_T.setType(PETSc.KSP.Type.PREONLY)
+        ksp_T.getPC().setType(PETSc.PC.Type.LU)
     # viewer = PETSc.Viewer().createASCII("viewer.txt")
     # ksp_T.view(viewer)
 
-    # for n in range(num_time_steps):
-    #     t += delta_t.value
+    for n in range(num_time_steps):
+        t += delta_t.value
 
-    #     for marker, bc_func in enumerate(bc_funcs_T):
-    #         expr = bcs[marker]["value"]
-    #         if isinstance(expr, TimeDependentExpression):
-    #             expr.t = t
-    #             bc_func.interpolate(expr)
-    #     if isinstance(f_T_expr, TimeDependentExpression):
-    #         f_T_expr.t = t
-    #         f_T.interpolate(f_T_expr)
+        for marker, bc_func in enumerate(bc_funcs_T):
+            expr = bcs[marker]["value"]
+            if isinstance(expr, TimeDependentExpression):
+                expr.t = t
+                bc_func.interpolate(expr)
+        if isinstance(f_T_expr, TimeDependentExpression):
+            f_T_expr.t = t
+            f_T.interpolate(f_T_expr)
 
-    #     its, converged = solver.solve(T_h)
-    #     T_h.x.scatter_forward()
-    #     assert(converged)
+        its, converged = solver.solve(T_h)
+        T_h.x.scatter_forward()
+        assert(converged)
 
-    #     T_n.x.array[:] = T_h.x.array
+        fem.assemble_matrix(A_u, a_u, bcs=dirichlet_bcs_u)
+        A_u.assemble()
+        with b_u.localForm() as b_u_loc:
+            b_u_loc.set(0)
+        fem.assemble_vector(b_u, L_u)
+        fem.apply_lifting(b_u, [a_u], bcs=[dirichlet_bcs_u])
+        b_u.ghostUpdate(addv=PETSc.InsertMode.ADD,
+                        mode=PETSc.ScatterMode.REVERSE)
+        fem.set_bc(b_u, dirichlet_bcs_u)
 
-    #     xdmf_file.write_function(T_h, t)
+        ksp_u.solve(b_u, u_h.vector)
+        u_h.x.scatter_forward()
+
+        xdmf_file.write_function(T_h, t)
+        xdmf_file.write_function(u_h, t)
+
+        T_n.x.array[:] = T_h.x.array
 
     xdmf_file.close()
 

@@ -35,13 +35,16 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, materials,
     # Time step
     delta_t = fem.Constant(mesh, PETSc.ScalarType(t_end / num_time_steps))
 
-    xdmf_file = XDMFFile(MPI.COMM_WORLD, "thermomech.xdmf", "w")
-    xdmf_file.write_mesh(mesh)
+    # FIXME Use one file
+    xdmf_file_T = XDMFFile(MPI.COMM_WORLD, "T.xdmf", "w")
+    xdmf_file_u = XDMFFile(MPI.COMM_WORLD, "u.xdmf", "w")
+    xdmf_file_T.write_mesh(mesh)
+    xdmf_file_u.write_mesh(mesh)
 
     T_h = fem.Function(V_T)
     T_h.name = "T"
     T_h.interpolate(T_i)
-    xdmf_file.write_function(T_h, t)
+    xdmf_file_T.write_function(T_h, t)
 
     T_n = fem.Function(V_T)
     T_n.x.array[:] = T_h.x.array
@@ -137,7 +140,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, materials,
     u_h.name = "u"
     ksp_u.solve(b_u, u_h.vector)
     u_h.x.scatter_forward()
-    xdmf_file.write_function(u_h, t)
+    xdmf_file_u.write_function(u_h, t)
 
     non_lin_problem = fem.NonlinearProblem(F_T, T_h, dirichlet_bcs_T)
     solver = NewtonSolver(MPI.COMM_WORLD, non_lin_problem)
@@ -189,12 +192,13 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, materials,
         ksp_u.solve(b_u, u_h.vector)
         u_h.x.scatter_forward()
 
-        xdmf_file.write_function(T_h, t)
-        xdmf_file.write_function(u_h, t)
+        xdmf_file_T.write_function(T_h, t)
+        xdmf_file_u.write_function(u_h, t)
 
         T_n.x.array[:] = T_h.x.array
 
-    xdmf_file.close()
+    xdmf_file_T.close()
+    xdmf_file_u.close()
 
     # return T_h
 

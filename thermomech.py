@@ -201,11 +201,11 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, materials,
     xdmf_file_T.close()
     xdmf_file_u.close()
 
-    # return T_h
+    return (T_h, u_h)
 
 
 def main():
-    t_end = 0.01
+    t_end = 1
     num_time_steps = 20
     n = 16
     k = 1

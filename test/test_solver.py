@@ -160,9 +160,9 @@ def compute_f_u(T_expr, t_end, T_e, u_e, materials):
 
 def test_temporal_convergence():
     t_end = 1.5
-    n = 128
+    n = 64
     k = 1
-    num_time_steps = [16, 32]
+    num_time_steps = [8, 16]
     mesh = create_unit_square(MPI.COMM_WORLD, n, n)
     material_mt = get_material_mt(mesh)
     bc_mt = get_bc_mt(mesh)

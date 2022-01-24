@@ -32,7 +32,7 @@ f_T_expr = TimeDependentExpression(
     np.cos(x[1] * np.pi))
 
 
-def u(x):
+def u_expr(x):
     return ufl.as_vector((ufl.sin(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1]),
                           ufl.sin(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1])))
 
@@ -147,17 +147,28 @@ def get_bc_mt(mesh):
 
 def test_temporal_convergence():
     t_end = 1.5
-    n = 64
+    n = 128
     k = 1
     num_time_steps = [16, 32]
     mesh = create_unit_square(MPI.COMM_WORLD, n, n)
-    # TODO Compute
-    f_u = fem.Constant(mesh, np.array([0, 0], dtype=PETSc.ScalarType))
-    errors_L2 = []
-    V_e = fem.FunctionSpace(mesh, ("Lagrange", k + 3))
-    T_e = fem.Function(V_e)
     material_mt = get_material_mt(mesh)
     bc_mt = get_bc_mt(mesh)
+
+    errors_L2 = {"T": [], "u": []}
+    V_e = fem.FunctionSpace(mesh, ("Lagrange", k + 3))
+    T_e = fem.Function(V_e)
+
+    # Set elastic force to give... TODO
+    x = ufl.SpatialCoordinate(mesh)
+    u_e = u_expr(x)
+    T_expr.t = t_end
+    T_e.interpolate(T_expr)
+    # This problem has two materials for testing, but they have the same
+    # properties, so can just use the first
+    f_u = - ufl.div(thermomech.sigma(
+        u_e, T_e, materials[0]["thermal_strain"][1],
+        materials[0]["thermal_strain"][0](T_e), materials[0]["E"](T_e),
+        materials[0]["nu"]))
     for i in range(len(num_time_steps)):
         T_expr.t = 0
         f_T_expr.t = 0
@@ -167,43 +178,45 @@ def test_temporal_convergence():
         (T_h, u_h) = thermomech.solve(mesh, k, t_end, num_time_steps[i],
                                       T_expr, f_T_expr, f_u, materials,
                                       material_mt, bcs, bc_mt)
-        T_e.interpolate(T_expr)
-        errors_L2.append(compute_error_L2_norm(mesh.comm, T_h, T_e))
+        errors_L2["T"].append(compute_error_L2_norm(mesh.comm, T_h, T_e))
+        errors_L2["u"].append(compute_error_L2_norm(mesh.comm, u_h, u_e))
 
-    r = compute_convergence_rate(errors_L2, num_time_steps)
+    r_T = compute_convergence_rate(errors_L2["T"], num_time_steps)
+    r_u = compute_convergence_rate(errors_L2["u"], num_time_steps)
 
-    assert(np.isclose(r, 1.0, atol=0.1))
+    assert(np.isclose(r_T, 1.0, atol=0.1))
+    assert(np.isclose(r_u, 1.0, atol=0.1))
 
 
-def test_spatial_convergence():
-    t_end = 1.5
-    num_time_steps = 200
-    k = 1
-    errors_L2 = []
-    ns = [8, 16]
+# def test_spatial_convergence():
+#     t_end = 1.5
+#     num_time_steps = 200
+#     k = 1
+#     errors_L2 = []
+#     ns = [8, 16]
 
-    for i in range(len(ns)):
-        T_expr.t = 0
-        f_T_expr.t = 0
-        for bc in bcs:
-            if isinstance(bc["value"], TimeDependentExpression):
-                bc["value"].t = 0
-        # TODO Use refine rather than create new mesh?
-        mesh = create_unit_square(MPI.COMM_WORLD, ns[i], ns[i])
-        material_mt = get_material_mt(mesh)
-        bc_mt = get_bc_mt(mesh)
-        # TODO Compute
-        f_u = fem.Constant(mesh, np.array([0, 0], dtype=PETSc.ScalarType))
-        (T_h, u_h) = thermomech.solve(mesh, k, t_end, num_time_steps,
-                                      T_expr, f_T_expr, f_u, materials,
-                                      material_mt, bcs, bc_mt)
+#     for i in range(len(ns)):
+#         T_expr.t = 0
+#         f_T_expr.t = 0
+#         for bc in bcs:
+#             if isinstance(bc["value"], TimeDependentExpression):
+#                 bc["value"].t = 0
+#         # TODO Use refine rather than create new mesh?
+#         mesh = create_unit_square(MPI.COMM_WORLD, ns[i], ns[i])
+#         material_mt = get_material_mt(mesh)
+#         bc_mt = get_bc_mt(mesh)
+#         # TODO Compute
+#         f_u = fem.Constant(mesh, np.array([0, 0], dtype=PETSc.ScalarType))
+#         (T_h, u_h) = thermomech.solve(mesh, k, t_end, num_time_steps,
+#                                       T_expr, f_T_expr, f_u, materials,
+#                                       material_mt, bcs, bc_mt)
 
-        V_e = fem.FunctionSpace(mesh, ("Lagrange", k + 3))
-        T_e = fem.Function(V_e)
-        T_e.interpolate(T_expr)
+#         V_e = fem.FunctionSpace(mesh, ("Lagrange", k + 3))
+#         T_e = fem.Function(V_e)
+#         T_e.interpolate(T_expr)
 
-        errors_L2.append(compute_error_L2_norm(mesh.comm, T_h, T_e))
+#         errors_L2.append(compute_error_L2_norm(mesh.comm, T_h, T_e))
 
-    r = compute_convergence_rate(errors_L2, ns)
+#     r = compute_convergence_rate(errors_L2, ns)
 
-    assert(np.isclose(r, 2.0, atol=0.1))
+#     assert(np.isclose(r, 2.0, atol=0.1))

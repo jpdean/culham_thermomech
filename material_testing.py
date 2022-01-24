@@ -161,6 +161,15 @@ def fit_piecewise_poly(x, y, degree, num_pieces):
 #               8536.0, 8495.0, 8453.0, 8409.0, 8363.0])
 
 
+# Copper Young's Modulus
+# degree = 2
+# num_splits = 1
+# x = np.array([293.15, 323.15, 373.15, 423.15, 473.15, 523.15, 573.15,
+#               623.15, 673.15])
+# y = np.array([117.0, 116.0, 114.0, 112.0, 110.0, 108.0, 105.0, 102.0,
+#               98.0]) * 1e9
+
+
 # # Inconel625 Thermal Conductivity
 # degree = 1
 # num_splits = 1

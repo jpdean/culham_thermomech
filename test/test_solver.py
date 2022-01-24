@@ -158,7 +158,8 @@ def test_temporal_convergence():
     V_e = fem.FunctionSpace(mesh, ("Lagrange", k + 3))
     T_e = fem.Function(V_e)
 
-    # Set elastic force to give... TODO
+    # The elastic solution doesn't depend on hte history of the applied force,
+    # so just set the force to be correct at t_end
     x = ufl.SpatialCoordinate(mesh)
     u_e = u_expr(x)
     T_expr.t = t_end

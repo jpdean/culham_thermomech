@@ -1,12 +1,13 @@
-import transient_heat
+import thermomech
 from mpi4py import MPI
 from dolfinx.mesh import create_unit_square
 from dolfinx import fem
 import ufl
 import numpy as np
-from problems import (TimeDependentExpression, create_mesh_tags,
-                      ufl_poly_from_table_data, compute_error_L2_norm,
-                      compute_convergence_rate)
+from utils import (TimeDependentExpression, create_mesh_tags,
+                   ufl_poly_from_table_data, compute_error_L2_norm,
+                   compute_convergence_rate)
+from petsc4py import PETSc
 
 
 T_expr = TimeDependentExpression(lambda x, t:
@@ -31,7 +32,7 @@ f_T_expr = TimeDependentExpression(
     np.cos(x[1] * np.pi))
 
 
-def u(x):
+def u_expr(x):
     return ufl.as_vector((ufl.sin(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1]),
                           ufl.sin(ufl.pi * x[0]) * ufl.sin(ufl.pi * x[1])))
 
@@ -119,51 +120,78 @@ def h(T):
 
 # Think of nicer way to deal with Robin bc
 # TODO Change "value" to expression
-bcs = [{"type": "robin",
+# TODO Add pressure BC
+bcs = [{"type": "convection",
         "value": T_inf,
         "h": h},
-       {"type": "neumann",
+       {"type": "heat_flux",
         "value": neumann_bc},
-       {"type": "dirichlet",
+       {"type": "temperature",
         "value": T_expr},
-       {"type": "dirichlet",
-        "value": T_expr}]
+       {"type": "temperature",
+        "value": T_expr},
+       {"type": "displacement",
+        "value": np.array([0, 0], dtype=PETSc.ScalarType)}]
 
 
 def get_bc_mt(mesh):
     boundaries = [lambda x: np.isclose(x[0], 0),
                   lambda x: np.isclose(x[0], 1),
                   lambda x: np.isclose(x[1], 0),
-                  lambda x: np.isclose(x[1], 1)]
+                  lambda x: np.isclose(x[1], 1),
+                  lambda x: np.logical_or(
+                      np.logical_or(np.isclose(x[0], 0), np.isclose(x[0], 1)),
+                      np.logical_or(np.isclose(x[1], 0), np.isclose(x[1], 1)))]
     return create_mesh_tags(mesh, boundaries, mesh.topology.dim - 1)
+
+
+def compute_f_u(T_expr, t_end, T_e, u_e, materials):
+    # The elastic solution doesn't depend on hte history of the applied force,
+    # so just set the force to be correct at t_end
+    T_expr.t = t_end
+    T_e.interpolate(T_expr)
+    # This problem has two materials for testing, but they have the same
+    # properties, so can just use the first
+    return - ufl.div(thermomech.sigma(
+        u_e, T_e, materials[0]["thermal_strain"][1],
+        materials[0]["thermal_strain"][0](T_e), materials[0]["E"](T_e),
+        materials[0]["nu"]))
 
 
 def test_temporal_convergence():
     t_end = 1.5
     n = 64
     k = 1
-    num_time_steps = [16, 32]
+    num_time_steps = [8, 16]
     mesh = create_unit_square(MPI.COMM_WORLD, n, n)
-    errors_L2 = []
-    V_e = fem.FunctionSpace(mesh, ("Lagrange", k + 3))
-    T_e = fem.Function(V_e)
     material_mt = get_material_mt(mesh)
     bc_mt = get_bc_mt(mesh)
+
+    errors_L2 = {"T": [], "u": []}
+    V_e = fem.FunctionSpace(mesh, ("Lagrange", k + 3))
+    T_e = fem.Function(V_e)
+
+    x = ufl.SpatialCoordinate(mesh)
+    u_e = u_expr(x)
+    f_u = compute_f_u(T_expr, t_end, T_e, u_e, materials)
+
     for i in range(len(num_time_steps)):
         T_expr.t = 0
         f_T_expr.t = 0
         for bc in bcs:
             if isinstance(bc["value"], TimeDependentExpression):
                 bc["value"].t = 0
-        T_h = transient_heat.solve(mesh, k, t_end, num_time_steps[i],
-                                   T_expr, f_T_expr, materials, material_mt,
-                                   bcs, bc_mt)
-        T_e.interpolate(T_expr)
-        errors_L2.append(compute_error_L2_norm(mesh.comm, T_h, T_e))
+        (T_h, u_h) = thermomech.solve(mesh, k, t_end, num_time_steps[i],
+                                      T_expr, f_T_expr, f_u, materials,
+                                      material_mt, bcs, bc_mt)
+        errors_L2["T"].append(compute_error_L2_norm(mesh.comm, T_h, T_e))
+        errors_L2["u"].append(compute_error_L2_norm(mesh.comm, u_h, u_e))
 
-    r = compute_convergence_rate(errors_L2, num_time_steps)
+    r_T = compute_convergence_rate(errors_L2["T"], num_time_steps)
+    r_u = compute_convergence_rate(errors_L2["u"], num_time_steps)
 
-    assert(np.isclose(r, 1.0, atol=0.1))
+    assert(np.isclose(r_T, 1.0, atol=0.1))
+    assert(np.isclose(r_u, 1.0, atol=0.1))
 
 
 def test_spatial_convergence():
@@ -173,26 +201,37 @@ def test_spatial_convergence():
     errors_L2 = []
     ns = [8, 16]
 
+    errors_L2 = {"T": [], "u": []}
     for i in range(len(ns)):
+        mesh = create_unit_square(MPI.COMM_WORLD, ns[i], ns[i])
+
+        T_expr.t = t_end
+        V_e = fem.FunctionSpace(mesh, ("Lagrange", k + 3))
+        T_e = fem.Function(V_e)
+        T_e.interpolate(T_expr)
+
+        x = ufl.SpatialCoordinate(mesh)
+        u_e = u_expr(x)
+        f_u = compute_f_u(T_expr, t_end, T_e, u_e, materials)
+
         T_expr.t = 0
         f_T_expr.t = 0
         for bc in bcs:
             if isinstance(bc["value"], TimeDependentExpression):
                 bc["value"].t = 0
         # TODO Use refine rather than create new mesh?
-        mesh = create_unit_square(MPI.COMM_WORLD, ns[i], ns[i])
         material_mt = get_material_mt(mesh)
         bc_mt = get_bc_mt(mesh)
-        T_h = transient_heat.solve(mesh, k, t_end, num_time_steps,
-                                   T_expr, f_T_expr, materials, material_mt,
-                                   bcs, bc_mt)
 
-        V_e = fem.FunctionSpace(mesh, ("Lagrange", k + 3))
-        T_e = fem.Function(V_e)
-        T_e.interpolate(T_expr)
+        (T_h, u_h) = thermomech.solve(mesh, k, t_end, num_time_steps,
+                                      T_expr, f_T_expr, f_u, materials,
+                                      material_mt, bcs, bc_mt)
 
-        errors_L2.append(compute_error_L2_norm(mesh.comm, T_h, T_e))
+        errors_L2["T"].append(compute_error_L2_norm(mesh.comm, T_h, T_e))
+        errors_L2["u"].append(compute_error_L2_norm(mesh.comm, u_h, u_e))
 
-    r = compute_convergence_rate(errors_L2, ns)
+    r_T = compute_convergence_rate(errors_L2["T"], ns)
+    r_u = compute_convergence_rate(errors_L2["u"], ns)
 
-    assert(np.isclose(r, 2.0, atol=0.1))
+    assert(np.isclose(r_T, 2.0, atol=0.1))
+    assert(np.isclose(r_u, 2.0, atol=0.1))

@@ -145,6 +145,19 @@ def get_bc_mt(mesh):
     return create_mesh_tags(mesh, boundaries, mesh.topology.dim - 1)
 
 
+def compute_f_u(T_expr, t_end, T_e, u_e, materials):
+    # The elastic solution doesn't depend on hte history of the applied force,
+    # so just set the force to be correct at t_end
+    T_expr.t = t_end
+    T_e.interpolate(T_expr)
+    # This problem has two materials for testing, but they have the same
+    # properties, so can just use the first
+    return - ufl.div(thermomech.sigma(
+        u_e, T_e, materials[0]["thermal_strain"][1],
+        materials[0]["thermal_strain"][0](T_e), materials[0]["E"](T_e),
+        materials[0]["nu"]))
+
+
 def test_temporal_convergence():
     t_end = 1.5
     n = 128
@@ -158,18 +171,10 @@ def test_temporal_convergence():
     V_e = fem.FunctionSpace(mesh, ("Lagrange", k + 3))
     T_e = fem.Function(V_e)
 
-    # The elastic solution doesn't depend on hte history of the applied force,
-    # so just set the force to be correct at t_end
     x = ufl.SpatialCoordinate(mesh)
     u_e = u_expr(x)
-    T_expr.t = t_end
-    T_e.interpolate(T_expr)
-    # This problem has two materials for testing, but they have the same
-    # properties, so can just use the first
-    f_u = - ufl.div(thermomech.sigma(
-        u_e, T_e, materials[0]["thermal_strain"][1],
-        materials[0]["thermal_strain"][0](T_e), materials[0]["E"](T_e),
-        materials[0]["nu"]))
+    f_u = compute_f_u(T_expr, t_end, T_e, u_e, materials)
+
     for i in range(len(num_time_steps)):
         T_expr.t = 0
         f_T_expr.t = 0
@@ -189,35 +194,41 @@ def test_temporal_convergence():
     assert(np.isclose(r_u, 1.0, atol=0.1))
 
 
-# def test_spatial_convergence():
-#     t_end = 1.5
-#     num_time_steps = 200
-#     k = 1
-#     errors_L2 = []
-#     ns = [8, 16]
+def test_spatial_convergence():
+    t_end = 1.5
+    num_time_steps = 200
+    k = 1
+    errors_L2 = []
+    ns = [8, 16]
 
-#     for i in range(len(ns)):
-#         T_expr.t = 0
-#         f_T_expr.t = 0
-#         for bc in bcs:
-#             if isinstance(bc["value"], TimeDependentExpression):
-#                 bc["value"].t = 0
-#         # TODO Use refine rather than create new mesh?
-#         mesh = create_unit_square(MPI.COMM_WORLD, ns[i], ns[i])
-#         material_mt = get_material_mt(mesh)
-#         bc_mt = get_bc_mt(mesh)
-#         # TODO Compute
-#         f_u = fem.Constant(mesh, np.array([0, 0], dtype=PETSc.ScalarType))
-#         (T_h, u_h) = thermomech.solve(mesh, k, t_end, num_time_steps,
-#                                       T_expr, f_T_expr, f_u, materials,
-#                                       material_mt, bcs, bc_mt)
+    for i in range(len(ns)):
+        mesh = create_unit_square(MPI.COMM_WORLD, ns[i], ns[i])
 
-#         V_e = fem.FunctionSpace(mesh, ("Lagrange", k + 3))
-#         T_e = fem.Function(V_e)
-#         T_e.interpolate(T_expr)
+        T_expr.t = t_end
+        V_e = fem.FunctionSpace(mesh, ("Lagrange", k + 3))
+        T_e = fem.Function(V_e)
+        T_e.interpolate(T_expr)
 
-#         errors_L2.append(compute_error_L2_norm(mesh.comm, T_h, T_e))
+        x = ufl.SpatialCoordinate(mesh)
+        u_e = u_expr(x)
+        f_u = compute_f_u(T_expr, t_end, T_e, u_e, materials)
 
-#     r = compute_convergence_rate(errors_L2, ns)
+        T_expr.t = 0
+        f_T_expr.t = 0
+        for bc in bcs:
+            if isinstance(bc["value"], TimeDependentExpression):
+                bc["value"].t = 0
+        # TODO Use refine rather than create new mesh?
+        material_mt = get_material_mt(mesh)
+        bc_mt = get_bc_mt(mesh)
+        # TODO Compute
+        f_u = fem.Constant(mesh, np.array([0, 0], dtype=PETSc.ScalarType))
+        (T_h, u_h) = thermomech.solve(mesh, k, t_end, num_time_steps,
+                                      T_expr, f_T_expr, f_u, materials,
+                                      material_mt, bcs, bc_mt)
 
-#     assert(np.isclose(r, 2.0, atol=0.1))
+        errors_L2.append(compute_error_L2_norm(mesh.comm, T_h, T_e))
+
+    r = compute_convergence_rate(errors_L2, ns)
+
+    assert(np.isclose(r, 2.0, atol=0.1))

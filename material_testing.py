@@ -233,6 +233,14 @@ def fit_piecewise_poly(x, y, degree, num_pieces):
 #               18.5, 18.6]) * 1e-6
 
 
+# # CuCrZr Density
+# degree = 2
+# num_splits = 1
+# x = np.array([293.15, 323.15, 373.15, 423.15, 473.15, 523.15, 573.15, 
+# 623.15, 673.15, 723.15, 773.15])
+# y = np.array([8900.0, 8886.0, 8863.0, 8840.0, 8816.0, 8791.0, 8767.0, 
+# 8742.0, 8716.0, 8691.0, 8665.0])
+
 # # 304SS Thermal Conductivity
 # degree = 1
 # num_splits = 1

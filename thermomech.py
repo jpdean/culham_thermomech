@@ -320,7 +320,7 @@ def main():
            {"type": "temperature",
             "value": lambda x: np.zeros_like(x[0])},
            {"type": "displacement",
-            "value": np.array([0, 0], dtype=PETSc.ScalarType)},
+            "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
            {"type": "pressure",
             "value": fem.Constant(mesh, PETSc.ScalarType(-1))}]
 

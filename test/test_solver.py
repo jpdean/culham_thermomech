@@ -1,4 +1,4 @@
-import transient_heat
+import thermomech
 from mpi4py import MPI
 from dolfinx.mesh import create_unit_square
 from dolfinx import fem
@@ -7,6 +7,7 @@ import numpy as np
 from problems import (TimeDependentExpression, create_mesh_tags,
                       ufl_poly_from_table_data, compute_error_L2_norm,
                       compute_convergence_rate)
+from petsc4py import PETSc
 
 
 T_expr = TimeDependentExpression(lambda x, t:
@@ -119,22 +120,28 @@ def h(T):
 
 # Think of nicer way to deal with Robin bc
 # TODO Change "value" to expression
-bcs = [{"type": "robin",
+# TODO Add pressure BC
+bcs = [{"type": "convection",
         "value": T_inf,
         "h": h},
-       {"type": "neumann",
+       {"type": "heat_flux",
         "value": neumann_bc},
-       {"type": "dirichlet",
+       {"type": "temperature",
         "value": T_expr},
-       {"type": "dirichlet",
-        "value": T_expr}]
+       {"type": "temperature",
+        "value": T_expr},
+       {"type": "displacement",
+        "value": np.array([0, 0], dtype=PETSc.ScalarType)}]
 
 
 def get_bc_mt(mesh):
     boundaries = [lambda x: np.isclose(x[0], 0),
                   lambda x: np.isclose(x[0], 1),
                   lambda x: np.isclose(x[1], 0),
-                  lambda x: np.isclose(x[1], 1)]
+                  lambda x: np.isclose(x[1], 1),
+                  lambda x: np.logical_or(
+                      np.logical_or(np.isclose(x[0], 0), np.isclose(x[0], 1)),
+                      np.logical_or(np.isclose(x[1], 0), np.isclose(x[1], 1)))]
     return create_mesh_tags(mesh, boundaries, mesh.topology.dim - 1)
 
 
@@ -144,6 +151,8 @@ def test_temporal_convergence():
     k = 1
     num_time_steps = [16, 32]
     mesh = create_unit_square(MPI.COMM_WORLD, n, n)
+    # TODO Compute
+    f_u = fem.Constant(mesh, np.array([0, 0], dtype=PETSc.ScalarType))
     errors_L2 = []
     V_e = fem.FunctionSpace(mesh, ("Lagrange", k + 3))
     T_e = fem.Function(V_e)
@@ -155,9 +164,9 @@ def test_temporal_convergence():
         for bc in bcs:
             if isinstance(bc["value"], TimeDependentExpression):
                 bc["value"].t = 0
-        T_h = transient_heat.solve(mesh, k, t_end, num_time_steps[i],
-                                   T_expr, f_T_expr, materials, material_mt,
-                                   bcs, bc_mt)
+        (T_h, u_h) = thermomech.solve(mesh, k, t_end, num_time_steps[i],
+                                      T_expr, f_T_expr, f_u, materials,
+                                      material_mt, bcs, bc_mt)
         T_e.interpolate(T_expr)
         errors_L2.append(compute_error_L2_norm(mesh.comm, T_h, T_e))
 
@@ -183,9 +192,11 @@ def test_spatial_convergence():
         mesh = create_unit_square(MPI.COMM_WORLD, ns[i], ns[i])
         material_mt = get_material_mt(mesh)
         bc_mt = get_bc_mt(mesh)
-        T_h = transient_heat.solve(mesh, k, t_end, num_time_steps,
-                                   T_expr, f_T_expr, materials, material_mt,
-                                   bcs, bc_mt)
+        # TODO Compute
+        f_u = fem.Constant(mesh, np.array([0, 0], dtype=PETSc.ScalarType))
+        (T_h, u_h) = thermomech.solve(mesh, k, t_end, num_time_steps,
+                                      T_expr, f_T_expr, f_u, materials,
+                                      material_mt, bcs, bc_mt)
 
         V_e = fem.FunctionSpace(mesh, ("Lagrange", k + 3))
         T_e = fem.Function(V_e)

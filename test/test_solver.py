@@ -201,6 +201,7 @@ def test_spatial_convergence():
     errors_L2 = []
     ns = [8, 16]
 
+    errors_L2 = {"T": [], "u": []}
     for i in range(len(ns)):
         mesh = create_unit_square(MPI.COMM_WORLD, ns[i], ns[i])
 
@@ -221,14 +222,16 @@ def test_spatial_convergence():
         # TODO Use refine rather than create new mesh?
         material_mt = get_material_mt(mesh)
         bc_mt = get_bc_mt(mesh)
-        # TODO Compute
-        f_u = fem.Constant(mesh, np.array([0, 0], dtype=PETSc.ScalarType))
+
         (T_h, u_h) = thermomech.solve(mesh, k, t_end, num_time_steps,
                                       T_expr, f_T_expr, f_u, materials,
                                       material_mt, bcs, bc_mt)
 
-        errors_L2.append(compute_error_L2_norm(mesh.comm, T_h, T_e))
+        errors_L2["T"].append(compute_error_L2_norm(mesh.comm, T_h, T_e))
+        errors_L2["u"].append(compute_error_L2_norm(mesh.comm, u_h, u_e))
 
-    r = compute_convergence_rate(errors_L2, ns)
+    r_T = compute_convergence_rate(errors_L2["T"], ns)
+    r_u = compute_convergence_rate(errors_L2["u"], ns)
 
-    assert(np.isclose(r, 2.0, atol=0.1))
+    assert(np.isclose(r_T, 2.0, atol=0.1))
+    assert(np.isclose(r_u, 2.0, atol=0.1))

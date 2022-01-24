@@ -12,8 +12,8 @@ from dolfinx.nls import NewtonSolver
 
 import ufl
 
-from problems import (TimeDependentExpression, create_mesh_tags,
-                      ufl_poly_from_table_data)
+from utils import (TimeDependentExpression, create_mesh_tags,
+                   ufl_poly_from_table_data)
 
 from contextlib import ExitStack
 

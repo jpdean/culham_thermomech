@@ -4,9 +4,9 @@ from dolfinx.mesh import create_unit_square
 from dolfinx import fem
 import ufl
 import numpy as np
-from problems import (TimeDependentExpression, create_mesh_tags,
-                      ufl_poly_from_table_data, compute_error_L2_norm,
-                      compute_convergence_rate)
+from utils import (TimeDependentExpression, create_mesh_tags,
+                   ufl_poly_from_table_data, compute_error_L2_norm,
+                   compute_convergence_rate)
 from petsc4py import PETSc
 
 

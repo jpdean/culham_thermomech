@@ -5,7 +5,7 @@ import numpy as np
 from mpi4py import MPI
 from petsc4py import PETSc
 
-from dolfinx import fem
+from dolfinx import fem, la
 from dolfinx.mesh import create_box
 from dolfinx.io import XDMFFile
 from dolfinx.nls import NewtonSolver
@@ -14,6 +14,54 @@ import ufl
 
 from problems import (TimeDependentExpression, create_mesh_tags,
                       ufl_poly_from_table_data)
+
+from contextlib import ExitStack
+
+
+def build_nullspace(V):
+    # TODO This can be simplified
+    """Function to build PETSc nullspace for 2D and 3D elasticity"""
+
+    d = V.mesh.topology.dim
+
+    # Create list of vectors for null space
+    index_map = V.dofmap.index_map
+    bs = V.dofmap.index_map_bs
+    if d == 2:
+        num_basis_vecs = 3
+    else:
+        assert(d == 3)
+        num_basis_vecs = 6
+    ns = [la.create_petsc_vector(index_map, bs) for i in range(num_basis_vecs)]
+    with ExitStack() as stack:
+        vec_local = [stack.enter_context(x.localForm()) for x in ns]
+        basis = [np.asarray(x) for x in vec_local]
+
+        # Get dof indices for each subspace
+        dofs = [V.sub(i).dofmap.list.array for i in range(d)]
+
+        # Build translational nullspace basis
+        for i in range(d):
+            basis[i][dofs[i]] = 1.0
+
+        # Build rotational nullspace basis
+        x = V.tabulate_dof_coordinates()
+        dofs_block = V.dofmap.list.array
+        x0 = x[dofs_block, 0]
+        x1 = x[dofs_block, 1]
+        basis[d][dofs[0]] = -x1
+        basis[d][dofs[1]] = x0
+
+        if d == 3:
+            x2 = x[dofs_block, 2]
+            basis[d + 1][dofs[0]] = x2
+            basis[d + 1][dofs[2]] = -x0
+            basis[d + 2][dofs[2]] = x1
+            basis[d + 2][dofs[1]] = -x2
+
+    la.orthonormalize(ns)
+    assert la.is_orthonormal(ns)
+    return PETSc.NullSpace().create(vectors=ns)
 
 
 def sigma(v, T, T_ref, alpha_L, E, nu):
@@ -130,18 +178,6 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, materials,
     b_u.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
     fem.set_bc(b_u, dirichlet_bcs_u)
 
-    ksp_u = PETSc.KSP().create(MPI.COMM_WORLD)
-    ksp_u.setOperators(A_u)
-    # TODO Use iterative
-    ksp_u.setType(PETSc.KSP.Type.PREONLY)
-    ksp_u.getPC().setType(PETSc.PC.Type.LU)
-
-    u_h = fem.Function(V_u)
-    u_h.name = "u"
-    ksp_u.solve(b_u, u_h.vector)
-    u_h.x.scatter_forward()
-    xdmf_file_u.write_function(u_h, t)
-
     non_lin_problem = fem.NonlinearProblem(F_T, T_h, dirichlet_bcs_T)
     solver = NewtonSolver(MPI.COMM_WORLD, non_lin_problem)
     solver.convergence_criterion = "incremental"
@@ -149,6 +185,8 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, materials,
     solver.report = True
 
     ksp_T = solver.krylov_solver
+    ksp_u = PETSc.KSP().create(MPI.COMM_WORLD)
+    ksp_u.setOperators(A_u)
 
     if use_iterative_solver:
         # NOTE May need to use GMRES as matrix isn't symmetric due to
@@ -157,11 +195,32 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, materials,
         ksp_T.setTolerances(rtol=1.0e-12)
         ksp_T.getPC().setType(PETSc.PC.Type.HYPRE)
         ksp_T.getPC().setHYPREType("boomeramg")
+
+        null_space = build_nullspace(V_u)
+        A_u.setNearNullSpace(null_space)
+        opts = PETSc.Options()
+        opts["ksp_type"] = "cg"
+        opts["ksp_rtol"] = 1.0e-12
+        opts["pc_type"] = "gamg"
+        opts["mg_levels_ksp_type"] = "chebyshev"
+        opts["mg_levels_pc_type"] = "jacobi"
+        opts["mg_levels_esteig_ksp_type"] = "cg"
+        opts["mg_levels_ksp_chebyshev_esteig_steps"] = 20
+        ksp_T.setFromOptions()
     else:
         ksp_T.setType(PETSc.KSP.Type.PREONLY)
         ksp_T.getPC().setType(PETSc.PC.Type.LU)
+
+        ksp_u.setType(PETSc.KSP.Type.PREONLY)
+        ksp_u.getPC().setType(PETSc.PC.Type.LU)
     # viewer = PETSc.Viewer().createASCII("viewer.txt")
     # ksp_T.view(viewer)
+
+    u_h = fem.Function(V_u)
+    u_h.name = "u"
+    ksp_u.solve(b_u, u_h.vector)
+    u_h.x.scatter_forward()
+    xdmf_file_u.write_function(u_h, t)
 
     for n in range(num_time_steps):
         t += delta_t.value

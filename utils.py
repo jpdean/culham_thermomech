@@ -24,13 +24,17 @@ def ufl_poly_from_table_data(x, y, degree, u, num_pieces=1):
             poly += coeffs[n] * u**n
         pieces.append(poly)
 
-    conditions = [ufl.gt(u, x_s[-1]) for x_s in x_split]
-    piecewise_poly = ufl.conditional(conditions[0], pieces[1], pieces[0])
-    for i in range(1, len(conditions) - 1):
-        piecewise_poly = ufl.conditional(conditions[i],
-                                         pieces[i + 1],
-                                         piecewise_poly)
-    return poly
+    if len(pieces) > 1:
+        # FIXME Simplify this
+        conditions = [ufl.gt(u, x_s[-1]) for x_s in x_split]
+        piecewise_poly = ufl.conditional(conditions[0], pieces[1], pieces[0])
+        for i in range(1, len(conditions) - 1):
+            piecewise_poly = ufl.conditional(conditions[i],
+                                             pieces[i + 1],
+                                             piecewise_poly)
+    else:
+        piecewise_poly = pieces[0]
+    return piecewise_poly
 
 
 def create_mesh_tags(mesh, locators, edim):

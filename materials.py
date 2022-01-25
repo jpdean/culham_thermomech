@@ -7,8 +7,7 @@ materials = {}
 
 # Copper
 materials["copper"] = \
-    {"kappa":
-     lambda T: ufl_poly_from_table_data(
+    {"kappa": lambda T: ufl_poly_from_table_data(
          x=np.array(
              [293.15, 323.15, 373.15, 423.15, 473.15, 523.15, 573.15,
               623.15, 673.15, 723.15, 773.15, 823.15, 873.15, 923.15,
@@ -19,8 +18,7 @@ materials["copper"] = \
               374.0, 371.0, 367.0, 364.0, 360.0, 357.0, 354.0, 350.0,
               347.0, 344.0, 340.0, 337.0, 334.0]),
          u=T, degree=1, num_pieces=1),
-     "c":
-     lambda T: ufl_poly_from_table_data(
+     "c": lambda T: ufl_poly_from_table_data(
          x=np.array(
              [293.15, 323.15, 373.15, 423.15, 473.15, 523.15, 573.15,
               623.15, 673.15, 723.15, 773.15, 823.15, 873.15, 923.15,
@@ -31,8 +29,7 @@ materials["copper"] = \
               419.0, 424.0, 430.0, 435.0, 441.0, 447.0, 453.0, 459.0,
               466.0, 472.0, 479.0, 487.0, 494.0]),
          u=T, degree=2, num_pieces=1),
-     "thermal_strain":
-     (lambda T: ufl_poly_from_table_data(
+     "thermal_strain": (lambda T: ufl_poly_from_table_data(
          x=np.array(
              [293.15, 323.15, 373.15, 423.15, 473.15, 523.15, 573.15,
               623.15, 673.15, 723.15, 773.15, 823.15, 873.15, 923.15,
@@ -42,8 +39,7 @@ materials["copper"] = \
               18.4, 18.5, 18.65, 18.8, 18.97, 19.14, 19.34, 19.55,
               19.78, 20.05]) * 1e-6,
          u=T, degree=3, num_pieces=1), 293.15),
-     "rho":
-     lambda T: ufl_poly_from_table_data(
+     "rho": lambda T: ufl_poly_from_table_data(
          x=np.array(
              [293.15, 323.15, 373.15, 423.15, 473.15, 523.15, 573.15,
               623.15, 673.15, 723.15, 773.15, 823.15, 873.15, 923.15,
@@ -53,8 +49,7 @@ materials["copper"] = \
               8774.0, 8744.0, 8713.0, 8681.0, 8647.0, 8612.0, 8575.0,
               8536.0, 8495.0, 8453.0, 8409.0, 8363.0]),
          u=T, degree=2, num_pieces=1),
-     "E":
-     lambda T: ufl_poly_from_table_data(
+     "E": lambda T: ufl_poly_from_table_data(
          x=np.array(
              [293.15, 323.15, 373.15, 423.15, 473.15, 523.15, 573.15,
               623.15, 673.15]),

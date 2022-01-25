@@ -1,4 +1,4 @@
-from materials import materials
+from materials import materials as mat_dict
 from utils import create_mesh_tags
 import numpy as np
 from mpi4py import MPI
@@ -22,12 +22,14 @@ mesh = create_box(
     [n, n, n])
 
 # TODO Let solver take dictionary of materials instead of list
-mats = []
-mats.append(materials["Copper"])
+materials = []
+materials.append(mat_dict["Copper"])
+materials.append(mat_dict["CuCrZr"])
 
 material_mt = create_mesh_tags(
     mesh,
-    [lambda x: x[0] >= -1],
+    [lambda x: x[0] <= 0.5,
+     lambda x: x[0] >= 0.5],
     mesh.topology.dim)
 
 bcs = [{"type": "temperature",
@@ -68,4 +70,4 @@ def T_i(x): return 293.15 * np.ones_like(x[0])
 
 g = PETSc.ScalarType(- 9.81)
 thermomech.solve(mesh, k, t_end, num_time_steps, T_i, f_T,
-                 f_u, g, mats, material_mt, bcs, bc_mt)
+                 f_u, g, materials, material_mt, bcs, bc_mt)

@@ -39,25 +39,24 @@ bcs = [{"type": "temperature",
        {"type": "convection",
         "value": lambda x: 393.15 * np.ones_like(x[0]),
         "h": lambda T: 5},
+       {"type": "heat_flux",
+        "value": lambda x: 1e3 * np.ones_like(x[0])},
        {"type": "displacement",
         "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
        {"type": "pressure",
-        "value": fem.Constant(mesh, PETSc.ScalarType(-1e4))}]
-
-
-def convection_boundary_marker(x):
-    r = np.isclose(x[0], 1.0)
-    tb = np.logical_or(np.isclose(x[1], 0.0), np.isclose(x[1], 1.0))
-    fb = np.logical_or(np.isclose(x[2], 0.0), np.isclose(x[2], 1.0))
-    tbfb = np.logical_or(tb, fb)
-    return np.logical_or(r, tbfb)
+        "value": fem.Constant(mesh, PETSc.ScalarType(-1e6))}]
 
 
 bc_mt = create_mesh_tags(
     mesh,
     [lambda x: np.isclose(x[0], 0.0),
-     convection_boundary_marker,
-     lambda x: np.isclose(x[0], 0),
+     lambda x: np.logical_or(
+        np.logical_or(np.isclose(x[0], 1.0),
+                      np.isclose(x[1], 1.0)),
+        np.logical_or(np.isclose(x[2], 0.0),
+                      np.isclose(x[2], 1.0))),
+     lambda x: np.isclose(x[1], 0.0),
+     lambda x: np.isclose(x[0], 0.0),
      lambda x: np.isclose(x[1], 1.0)],
     mesh.topology.dim - 1)
 

@@ -25,11 +25,13 @@ mesh = create_box(
 materials = []
 materials.append(mat_dict["Copper"])
 materials.append(mat_dict["CuCrZr"])
+materials.append(mat_dict["304SS"])
 
 material_mt = create_mesh_tags(
     mesh,
     [lambda x: x[0] <= 0.5,
-     lambda x: x[0] >= 0.5],
+     lambda x: np.logical_and(x[0] >= 0.5, x[0] <= 1.0),
+     lambda x: x[0] >= 1.0],
     mesh.topology.dim)
 
 bcs = [{"type": "temperature",

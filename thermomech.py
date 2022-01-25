@@ -74,8 +74,8 @@ def sigma(v, T, T_ref, alpha_L, E, nu):
     return 2.0 * mu * eps + lmbda * ufl.tr(eps) * ufl.Identity(len(v))
 
 
-def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, materials,
-          material_mt, bcs, bc_mt, use_iterative_solver=True):
+def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
+          materials, material_mt, bcs, bc_mt, use_iterative_solver=True):
     t = 0.0
     V_T = fem.FunctionSpace(mesh, ("Lagrange", k))
     V_u = fem.VectorFunctionSpace(mesh, ("Lagrange", k))
@@ -126,6 +126,10 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, materials,
         F_u += ufl.inner(
             sigma(u, T_h, T_ref, alpha_L(T_h), E(T_h), nu),
             ufl.grad(w)) * dx(marker)
+        # Add gravity in the direction of the last component i.e.
+        # y dir in 2D, z dir in 3D
+        F_u -= ufl.inner(rho * fem.Constant(mesh, g),
+                         w[mesh.topology.dim - 1]) * dx(marker)
 
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=bc_mt)
 
@@ -335,8 +339,10 @@ def main():
 
     f_u = fem.Constant(mesh, np.array([0, 0, -1], dtype=PETSc.ScalarType))
 
-    solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, materials,
-          material_mt, bcs, bc_mt)
+    g = PETSc.ScalarType(- 9.81)
+
+    solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
+          materials, material_mt, bcs, bc_mt)
 
 
 if __name__ == "__main__":

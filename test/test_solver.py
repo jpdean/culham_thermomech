@@ -177,6 +177,8 @@ def test_temporal_convergence():
     u_e = u_expr(x)
     f_u = compute_f_u(T_expr, t_end, T_e, u_e, materials)
 
+    g = PETSc.ScalarType(0.0)
+
     for i in range(len(num_time_steps)):
         T_expr.t = 0
         f_T_expr.t = 0
@@ -184,7 +186,7 @@ def test_temporal_convergence():
             if isinstance(bc["value"], TimeDependentExpression):
                 bc["value"].t = 0
         (T_h, u_h) = thermomech.solve(mesh, k, t_end, num_time_steps[i],
-                                      T_expr, f_T_expr, f_u, materials,
+                                      T_expr, f_T_expr, f_u, g, materials,
                                       material_mt, bcs, bc_mt)
         errors_L2["T"].append(compute_error_L2_norm(mesh.comm, T_h, T_e))
         errors_L2["u"].append(compute_error_L2_norm(mesh.comm, u_h, u_e))
@@ -202,6 +204,8 @@ def test_spatial_convergence():
     k = 1
     errors_L2 = []
     ns = [8, 16]
+
+    g = PETSc.ScalarType(0.0)
 
     errors_L2 = {"T": [], "u": []}
     for i in range(len(ns)):
@@ -226,7 +230,7 @@ def test_spatial_convergence():
         bc_mt = get_bc_mt(mesh)
 
         (T_h, u_h) = thermomech.solve(mesh, k, t_end, num_time_steps,
-                                      T_expr, f_T_expr, f_u, materials,
+                                      T_expr, f_T_expr, f_u, g, materials,
                                       material_mt, bcs, bc_mt)
 
         errors_L2["T"].append(compute_error_L2_norm(mesh.comm, T_h, T_e))

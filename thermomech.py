@@ -311,7 +311,7 @@ def main():
         # Dummy data representing 2.7 + T**2
         x = np.array([0.0, 0.25, 0.50, 0.75, 1.0])
         y = np.array([3.5, 3.5625, 3.75, 4.0625, 4.5])
-        h_poly = ufl_poly_from_table_data(x, y, 2, T)
+        h_poly = ufl_poly_from_table_data(x, y, T, 2)
         # NOTE For this problem, this will always be false as the solution
         # is zero on this boundary
         return ufl.conditional(T > 0.5, 3.5 + T**2, h_poly)

@@ -43,21 +43,21 @@ def c(T):
     # Dummy data representing 1.3 + T**2
     x = np.array([0.0, 0.25, 0.50, 0.75, 1.0])
     y = np.array([1.3, 1.3625, 1.55, 1.8625, 2.3])
-    return ufl_poly_from_table_data(x, y, 2, T)
+    return ufl_poly_from_table_data(x, y, T, 2)
 
 
 def rho(T):
     # Dummy data representing 2.7 + T**2
     x = np.array([0.0, 0.25, 0.50, 0.75, 1.0])
     y = np.array([2.7, 2.7625, 2.95, 3.2625, 3.7])
-    return ufl_poly_from_table_data(x, y, 2, T)
+    return ufl_poly_from_table_data(x, y, T, 2)
 
 
 def kappa(T):
     # Dummy data representing 4.1 + T**2
     x = np.array([0.0, 0.25, 0.50, 0.75, 1.0])
     y = np.array([4.1, 4.1625, 4.35, 4.6625, 5.1])
-    return ufl_poly_from_table_data(x, y, 2, T)
+    return ufl_poly_from_table_data(x, y, T, 2)
 
 
 # Create two materials (they are the same, just mat_1
@@ -114,7 +114,7 @@ def h(T):
     # Dummy data representing 2.7 + T**2
     x = np.array([0.0, 0.25, 0.50, 0.75, 1.0])
     y = np.array([3.5, 3.5625, 3.75, 4.0625, 4.5])
-    h_poly = ufl_poly_from_table_data(x, y, 2, T)
+    h_poly = ufl_poly_from_table_data(x, y, T, 2)
     # NOTE For this problem, this will always be false as the solution
     # is zero on this boundary
     return ufl.conditional(T > 0.5, 3.5 + T**2, h_poly)

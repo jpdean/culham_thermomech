@@ -35,7 +35,7 @@ bcs = [{"type": "temperature",
        {"type": "displacement",
         "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
        {"type": "pressure",
-        "value": fem.Constant(mesh, PETSc.ScalarType(-1e5))}]
+        "value": fem.Constant(mesh, PETSc.ScalarType(-1e4))}]
 
 
 def convection_boundary_marker(x):
@@ -54,8 +54,7 @@ bc_mt = create_mesh_tags(
      lambda x: np.isclose(x[1], 1.0)],
     mesh.topology.dim - 1)
 
-# FIXME Implement gravity properly
-f_u = fem.Constant(mesh, np.array([0, 0, -1e4], dtype=PETSc.ScalarType))
+f_u = fem.Constant(mesh, np.array([0, 0, 0], dtype=PETSc.ScalarType))
 
 
 def f_T(x): return np.zeros_like(x[0])
@@ -64,5 +63,6 @@ def f_T(x): return np.zeros_like(x[0])
 def T_i(x): return 293.15 * np.ones_like(x[0])
 
 
+g = PETSc.ScalarType(- 9.81)
 thermomech.solve(mesh, k, t_end, num_time_steps, T_i, f_T,
-                 f_u, mats, material_mt, bcs, bc_mt)
+                 f_u, g, mats, material_mt, bcs, bc_mt)

@@ -8,6 +8,9 @@ from dolfinx import fem
 import thermomech
 
 
+# FIXME Mesh does not necessarily align with materials
+
+
 t_end = 10000
 num_time_steps = 100
 n = 16
@@ -20,7 +23,7 @@ mesh = create_box(
 
 # TODO Let solver take dictionary of materials instead of list
 mats = []
-mats.append(materials["copper"])
+mats.append(materials["Copper"])
 
 material_mt = create_mesh_tags(
     mesh,

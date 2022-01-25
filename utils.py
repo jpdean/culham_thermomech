@@ -11,8 +11,6 @@ def ufl_poly_from_table_data(x, y, degree, u, num_pieces=1):
     """Given a list of point data x and y, this function returns a fitted
     polynomial of degree `degree` in terms of the UFL `Function` `u`"""
 
-    # TODO Complete and check
-
     pieces = []
     x_split = np.array_split(x, num_pieces)
     y_split = np.array_split(y, num_pieces)

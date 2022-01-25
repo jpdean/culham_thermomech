@@ -11,7 +11,7 @@ import thermomech
 # FIXME Mesh does not necessarily align with materials
 
 
-t_end = 1000
+t_end = 750
 num_time_steps = 10
 n = 16
 k = 1

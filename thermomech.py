@@ -289,7 +289,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
 
 def main():
     t_end = 750
-    num_time_steps = 20
+    num_time_steps = 10
     n = 16
     k = 1
     L = 2.0

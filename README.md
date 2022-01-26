@@ -1,2 +1,2 @@
-# UKAEA Culham Transient Heat Equation Solver
-Transient non-linear heat equation solver for Culham UKAEA internship.
+# UKAEA Culham Thermomechanical Solver
+Transient non-linear thermomechanical solver for Culham UKAEA internship.

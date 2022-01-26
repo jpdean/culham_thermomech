@@ -210,7 +210,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         opts["mg_levels_pc_type"] = "jacobi"
         opts["mg_levels_esteig_ksp_type"] = "cg"
         opts["mg_levels_ksp_chebyshev_esteig_steps"] = 20
-        ksp_T.setFromOptions()
+        ksp_u.setFromOptions()
     else:
         ksp_T.setType(PETSc.KSP.Type.PREONLY)
         ksp_T.getPC().setType(PETSc.PC.Type.LU)
@@ -219,6 +219,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         ksp_u.getPC().setType(PETSc.PC.Type.LU)
     # viewer = PETSc.Viewer().createASCII("viewer.txt")
     # ksp_T.view(viewer)
+    # ksp_u.view(viewer)
 
     u_h = fem.Function(V_u)
     u_h.name = "u"

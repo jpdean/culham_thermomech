@@ -12,10 +12,13 @@ from dolfinx.nls import NewtonSolver
 
 import ufl
 
-from utils import (TimeDependentExpression, create_mesh_tags,
-                   ufl_poly_from_table_data)
+from utils import TimeDependentExpression, create_mesh_tags
 
 from contextlib import ExitStack
+
+
+def monitor(ksp, its, rnorm):
+    print(f"Iteration: {its}, rel. residual: {rnorm}")
 
 
 def build_nullspace(V):
@@ -74,25 +77,34 @@ def sigma(v, T, T_ref, alpha_L, E, nu):
     return 2.0 * mu * eps + lmbda * ufl.tr(eps) * ufl.Identity(len(v))
 
 
-def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, materials,
-          material_mt, bcs, bc_mt, use_iterative_solver=True):
+def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
+          materials, material_mt, bcs, bc_mt, use_iterative_solver=True,
+          write_to_file=True):
     t = 0.0
     V_T = fem.FunctionSpace(mesh, ("Lagrange", k))
     V_u = fem.VectorFunctionSpace(mesh, ("Lagrange", k))
 
+    if mesh.comm.Get_rank() == 0:
+        num_dofs_global = \
+            V_T.dofmap.index_map.size_global * V_T.dofmap.index_map_bs + \
+            V_u.dofmap.index_map.size_global * V_u.dofmap.index_map_bs
+        print(f"Number of DOFs (global): {num_dofs_global}")
+
     # Time step
     delta_t = fem.Constant(mesh, PETSc.ScalarType(t_end / num_time_steps))
 
-    # FIXME Use one file
-    xdmf_file_T = XDMFFile(MPI.COMM_WORLD, "T.xdmf", "w")
-    xdmf_file_u = XDMFFile(MPI.COMM_WORLD, "u.xdmf", "w")
-    xdmf_file_T.write_mesh(mesh)
-    xdmf_file_u.write_mesh(mesh)
+    if write_to_file:
+        # FIXME Use one file
+        xdmf_file_T = XDMFFile(MPI.COMM_WORLD, "T.xdmf", "w")
+        xdmf_file_u = XDMFFile(MPI.COMM_WORLD, "u.xdmf", "w")
+        xdmf_file_T.write_mesh(mesh)
+        xdmf_file_u.write_mesh(mesh)
 
     T_h = fem.Function(V_T)
     T_h.name = "T"
     T_h.interpolate(T_i)
-    xdmf_file_T.write_function(T_h, t)
+    if write_to_file:
+        xdmf_file_T.write_function(T_h, t)
 
     T_n = fem.Function(V_T)
     T_n.x.array[:] = T_h.x.array
@@ -126,6 +138,10 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, materials,
         F_u += ufl.inner(
             sigma(u, T_h, T_ref, alpha_L(T_h), E(T_h), nu),
             ufl.grad(w)) * dx(marker)
+        # Add gravity in the direction of the last component i.e.
+        # y dir in 2D, z dir in 3D
+        F_u -= ufl.inner(rho * fem.Constant(mesh, g),
+                         w[mesh.topology.dim - 1]) * dx(marker)
 
     ds = ufl.Measure("ds", domain=mesh, subdomain_data=bc_mt)
 
@@ -206,7 +222,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, materials,
         opts["mg_levels_pc_type"] = "jacobi"
         opts["mg_levels_esteig_ksp_type"] = "cg"
         opts["mg_levels_ksp_chebyshev_esteig_steps"] = 20
-        ksp_T.setFromOptions()
+        ksp_u.setFromOptions()
     else:
         ksp_T.setType(PETSc.KSP.Type.PREONLY)
         ksp_T.getPC().setType(PETSc.PC.Type.LU)
@@ -215,12 +231,14 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, materials,
         ksp_u.getPC().setType(PETSc.PC.Type.LU)
     # viewer = PETSc.Viewer().createASCII("viewer.txt")
     # ksp_T.view(viewer)
+    # ksp_u.view(viewer)
 
     u_h = fem.Function(V_u)
     u_h.name = "u"
     ksp_u.solve(b_u, u_h.vector)
     u_h.x.scatter_forward()
-    xdmf_file_u.write_function(u_h, t)
+    if write_to_file:
+        xdmf_file_u.write_function(u_h, t)
 
     for n in range(num_time_steps):
         t += delta_t.value
@@ -234,7 +252,10 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, materials,
             f_T_expr.t = t
             f_T.interpolate(f_T_expr)
 
+        # ksp_T.setMonitor(monitor)
         its, converged = solver.solve(T_h)
+        # if mesh.comm.Get_rank() == 0:
+        #     print(its)
         T_h.x.scatter_forward()
         assert(converged)
 
@@ -249,94 +270,88 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, materials,
                         mode=PETSc.ScatterMode.REVERSE)
         fem.set_bc(b_u, dirichlet_bcs_u)
 
+        # ksp_u.setMonitor(monitor)
         ksp_u.solve(b_u, u_h.vector)
         u_h.x.scatter_forward()
 
-        xdmf_file_T.write_function(T_h, t)
-        xdmf_file_u.write_function(u_h, t)
+        if write_to_file:
+            xdmf_file_T.write_function(T_h, t)
+            xdmf_file_u.write_function(u_h, t)
 
         T_n.x.array[:] = T_h.x.array
 
-    xdmf_file_T.close()
-    xdmf_file_u.close()
+    if write_to_file:
+        xdmf_file_T.close()
+        xdmf_file_u.close()
 
     return (T_h, u_h)
 
 
 def main():
-    t_end = 1
-    num_time_steps = 20
+    t_end = 750
+    num_time_steps = 10
     n = 16
     k = 1
+    L = 2.0
+    w = 1.0
+
+    # FIXME Mesh does not necessarily align with materials
     mesh = create_box(
-        MPI.COMM_WORLD, [np.array([0.0, 0.0, 0.0]),
-                         np.array([2.0, 1.0, 1.0])], [n, n, n])
+        MPI.COMM_WORLD,
+        [np.array([0.0, 0.0, 0.0]),
+         np.array([L, w, w])],
+        [n, n, n])
 
-    def T_i(x):
-        return np.zeros_like(x[0])
-
-    f_T_expr = TimeDependentExpression(
-        lambda x, t: np.sin(np.pi * x[0]) * np.cos(np.pi * x[1]) *
-        np.sin(np.pi * t))
-
+    # TODO Let solver take dictionary of materials instead of list
+    from materials import materials as mat_dict
     materials = []
-    # TODO Test ufl_poly_from_table_data for elastic properties
-    materials.append({"name": "mat_1",
-                      "c": lambda T: 1.3 + T**2,
-                      "rho": lambda T: 2.7 + T**2,
-                      "kappa": lambda T: 4.1 + T**2,
-                      "nu": 0.33,
-                      "E": lambda T: 1.0 + 0.1 * T**2,
-                      "thermal_strain": (lambda T: 0.1 + 0.01 * T**3, 1.5)})
-    materials.append({"name": "mat_2",
-                      "c": lambda T: 1.7 + T**2,
-                      "rho": lambda T: 0.7 + 0.1 * T**2,
-                      "kappa": lambda T: 3.2 + 0.6 * T**2,
-                      "nu": 0.1,
-                      "E": lambda T: 1.0 + 0.5 * T**2,
-                      "thermal_strain": (lambda T: 0.2 + 0.015 * T**2, 1.0)})
+    materials.append(mat_dict["304SS"])
+    materials.append(mat_dict["Copper"])
+    materials.append(mat_dict["CuCrZr"])
+
     material_mt = create_mesh_tags(
         mesh,
-        [lambda x: x[0] <= 0.5,
-         lambda x: x[0] >= 0.5],
+        [lambda x: x[0] <= L / 4,
+         lambda x: np.logical_and(x[0] >= L / 4, x[0] <= L / 2),
+         lambda x: x[0] >= L / 2],
         mesh.topology.dim)
 
-    def h(T):
-        # Test ufl.conditional works OK for complicated coefficients
-        # which should be approximated with multiple polynomials.
-        # Dummy data representing 2.7 + T**2
-        x = np.array([0.0, 0.25, 0.50, 0.75, 1.0])
-        y = np.array([3.5, 3.5625, 3.75, 4.0625, 4.5])
-        h_poly = ufl_poly_from_table_data(x, y, 2, T)
-        # NOTE For this problem, this will always be false as the solution
-        # is zero on this boundary
-        return ufl.conditional(T > 0.5, 3.5 + T**2, h_poly)
-
-    bcs = [{"type": "convection",
-            "value": lambda x: 0.1 * np.ones_like(x[0]),
-            "h": h},
+    bcs = [{"type": "temperature",
+            "value": lambda x: 293.15 * np.ones_like(x[0])},
+           {"type": "convection",
+            "value": lambda x: 293.15 * np.ones_like(x[0]),
+            "h": lambda T: 5},
+           {"type": "convection",
+            "value": lambda x: 293.15 * np.ones_like(x[0]),
+            "h": mat_dict["water"]["h"]},
            {"type": "heat_flux",
-            "value": lambda x: 0.5 * np.ones_like(x[0])},
-           {"type": "temperature",
-            "value": lambda x: np.zeros_like(x[0])},
+            "value": lambda x: 1e5 * np.ones_like(x[0])},
            {"type": "displacement",
             "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
            {"type": "pressure",
-            "value": fem.Constant(mesh, PETSc.ScalarType(-1))}]
+            "value": fem.Constant(mesh, PETSc.ScalarType(-1e6))}]
 
     bc_mt = create_mesh_tags(
         mesh,
-        [lambda x: np.logical_or(np.isclose(x[1], 0), np.isclose(x[1], 1)),
-         lambda x: np.isclose(x[2], 1),
-         lambda x: np.isclose(x[0], 0),
-         lambda x: np.isclose(x[0], 0),
-         lambda x: np.isclose(x[2], 1.0)],
+        [lambda x: np.isclose(x[0], 0.0),
+         lambda x: np.logical_or(np.isclose(x[1], 0.0),
+                                 np.isclose(x[2], 0.0)),
+         lambda x: np.logical_or(np.isclose(x[1], w),
+                                 np.isclose(x[2], w)),
+         lambda x: np.isclose(x[0], L),
+         lambda x: np.isclose(x[0], 0.0),
+         lambda x: np.isclose(x[1], w)],
         mesh.topology.dim - 1)
 
-    f_u = fem.Constant(mesh, np.array([0, 0, -1], dtype=PETSc.ScalarType))
+    f_u = fem.Constant(mesh, np.array([0, 0, 0], dtype=PETSc.ScalarType))
 
-    solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, materials,
-          material_mt, bcs, bc_mt)
+    def f_T(x): return np.zeros_like(x[0])
+
+    def T_i(x): return 293.15 * np.ones_like(x[0])
+
+    g = PETSc.ScalarType(- 9.81)
+    solve(mesh, k, t_end, num_time_steps, T_i, f_T,
+          f_u, g, materials, material_mt, bcs, bc_mt)
 
 
 if __name__ == "__main__":

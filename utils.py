@@ -7,15 +7,32 @@ import ufl
 from mpi4py import MPI
 
 
-def ufl_poly_from_table_data(x, y, degree, u):
+def ufl_poly_from_table_data(x, y, u, degree, num_pieces=1):
     """Given a list of point data x and y, this function returns a fitted
     polynomial of degree `degree` in terms of the UFL `Function` `u`"""
-    coeffs = np.polynomial.Polynomial.fit(x, y, degree).convert().coef
 
-    poly = 0
-    for n in range(degree + 1):
-        poly += coeffs[n] * u**n
-    return poly
+    pieces = []
+    x_split = np.array_split(x, num_pieces)
+    y_split = np.array_split(y, num_pieces)
+    for i in range(num_pieces):
+        coeffs = np.polynomial.Polynomial.fit(
+            x_split[i], y_split[i], degree).convert().coef
+        poly = 0
+        for n in range(degree + 1):
+            poly += coeffs[n] * u**n
+        pieces.append(poly)
+
+    if len(pieces) > 1:
+        # FIXME Simplify this
+        conditions = [ufl.gt(u, x_s[-1]) for x_s in x_split]
+        piecewise_poly = ufl.conditional(conditions[0], pieces[1], pieces[0])
+        for i in range(1, len(conditions) - 1):
+            piecewise_poly = ufl.conditional(conditions[i],
+                                             pieces[i + 1],
+                                             piecewise_poly)
+    else:
+        piecewise_poly = pieces[0]
+    return piecewise_poly
 
 
 def create_mesh_tags(mesh, locators, edim):

@@ -12,8 +12,7 @@ from dolfinx.nls import NewtonSolver
 
 import ufl
 
-from utils import (TimeDependentExpression, create_mesh_tags,
-                   ufl_poly_from_table_data)
+from utils import TimeDependentExpression, create_mesh_tags
 
 from contextlib import ExitStack
 
@@ -289,81 +288,70 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
 
 
 def main():
-    t_end = 1
+    t_end = 750
     num_time_steps = 20
     n = 16
     k = 1
+    L = 2.0
+    w = 1.0
+
+    # FIXME Mesh does not necessarily align with materials
     mesh = create_box(
-        MPI.COMM_WORLD, [np.array([0.0, 0.0, 0.0]),
-                         np.array([2.0, 1.0, 1.0])], [n, n, n])
+        MPI.COMM_WORLD,
+        [np.array([0.0, 0.0, 0.0]),
+         np.array([L, w, w])],
+        [n, n, n])
 
-    def T_i(x):
-        return np.zeros_like(x[0])
-
-    f_T_expr = TimeDependentExpression(
-        lambda x, t: np.sin(np.pi * x[0]) * np.cos(np.pi * x[1]) *
-        np.sin(np.pi * t))
-
+    # TODO Let solver take dictionary of materials instead of list
+    from materials import materials as mat_dict
     materials = []
-    # TODO Test ufl_poly_from_table_data for elastic properties
-    materials.append({"name": "mat_1",
-                      "c": lambda T: 1.3 + T**2,
-                      "rho": lambda T: 2.7 + T**2,
-                      "kappa": lambda T: 4.1 + T**2,
-                      "nu": 0.33,
-                      "E": lambda T: 1.0 + 0.1 * T**2,
-                      "thermal_strain": (lambda T: 0.1 + 0.01 * T**3, 1.5)})
-    materials.append({"name": "mat_2",
-                      "c": lambda T: 1.7 + T**2,
-                      "rho": lambda T: 0.7 + 0.1 * T**2,
-                      "kappa": lambda T: 3.2 + 0.6 * T**2,
-                      "nu": 0.1,
-                      "E": lambda T: 1.0 + 0.5 * T**2,
-                      "thermal_strain": (lambda T: 0.2 + 0.015 * T**2, 1.0)})
+    materials.append(mat_dict["304SS"])
+    materials.append(mat_dict["Copper"])
+    materials.append(mat_dict["CuCrZr"])
+
     material_mt = create_mesh_tags(
         mesh,
-        [lambda x: x[0] <= 0.5,
-         lambda x: x[0] >= 0.5],
+        [lambda x: x[0] <= L / 4,
+         lambda x: np.logical_and(x[0] >= L / 4, x[0] <= L / 2),
+         lambda x: x[0] >= L / 2],
         mesh.topology.dim)
 
-    def h(T):
-        # Test ufl.conditional works OK for complicated coefficients
-        # which should be approximated with multiple polynomials.
-        # Dummy data representing 2.7 + T**2
-        x = np.array([0.0, 0.25, 0.50, 0.75, 1.0])
-        y = np.array([3.5, 3.5625, 3.75, 4.0625, 4.5])
-        h_poly = ufl_poly_from_table_data(x, y, T, 2)
-        # NOTE For this problem, this will always be false as the solution
-        # is zero on this boundary
-        return ufl.conditional(T > 0.5, 3.5 + T**2, h_poly)
-
-    bcs = [{"type": "convection",
-            "value": lambda x: 0.1 * np.ones_like(x[0]),
-            "h": h},
+    bcs = [{"type": "temperature",
+            "value": lambda x: 293.15 * np.ones_like(x[0])},
+           {"type": "convection",
+            "value": lambda x: 293.15 * np.ones_like(x[0]),
+            "h": lambda T: 5},
+           {"type": "convection",
+            "value": lambda x: 293.15 * np.ones_like(x[0]),
+            "h": mat_dict["water"]["h"]},
            {"type": "heat_flux",
-            "value": lambda x: 0.5 * np.ones_like(x[0])},
-           {"type": "temperature",
-            "value": lambda x: np.zeros_like(x[0])},
+            "value": lambda x: 1e5 * np.ones_like(x[0])},
            {"type": "displacement",
             "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
            {"type": "pressure",
-            "value": fem.Constant(mesh, PETSc.ScalarType(-1))}]
+            "value": fem.Constant(mesh, PETSc.ScalarType(-1e6))}]
 
     bc_mt = create_mesh_tags(
         mesh,
-        [lambda x: np.logical_or(np.isclose(x[1], 0), np.isclose(x[1], 1)),
-         lambda x: np.isclose(x[2], 1),
-         lambda x: np.isclose(x[0], 0),
-         lambda x: np.isclose(x[0], 0),
-         lambda x: np.isclose(x[2], 1.0)],
+        [lambda x: np.isclose(x[0], 0.0),
+         lambda x: np.logical_or(np.isclose(x[1], 0.0),
+                                 np.isclose(x[2], 0.0)),
+         lambda x: np.logical_or(np.isclose(x[1], w),
+                                 np.isclose(x[2], w)),
+         lambda x: np.isclose(x[0], L),
+         lambda x: np.isclose(x[0], 0.0),
+         lambda x: np.isclose(x[1], w)],
         mesh.topology.dim - 1)
 
-    f_u = fem.Constant(mesh, np.array([0, 0, -1], dtype=PETSc.ScalarType))
+    f_u = fem.Constant(mesh, np.array([0, 0, 0], dtype=PETSc.ScalarType))
+
+    def f_T(x): return np.zeros_like(x[0])
+
+    def T_i(x): return 293.15 * np.ones_like(x[0])
 
     g = PETSc.ScalarType(- 9.81)
-
-    solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
-          materials, material_mt, bcs, bc_mt)
+    solve(mesh, k, t_end, num_time_steps, T_i, f_T,
+          f_u, g, materials, material_mt, bcs, bc_mt)
 
 
 if __name__ == "__main__":

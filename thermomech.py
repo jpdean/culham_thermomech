@@ -18,6 +18,10 @@ from utils import (TimeDependentExpression, create_mesh_tags,
 from contextlib import ExitStack
 
 
+def monitor(ksp, its, rnorm):
+    print(f"Iteration: {its}, rel. residual: {rnorm}")
+
+
 def build_nullspace(V):
     # TODO This can be simplified
     """Function to build PETSc nullspace for 2D and 3D elasticity"""
@@ -239,7 +243,10 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
             f_T_expr.t = t
             f_T.interpolate(f_T_expr)
 
+        # ksp_T.setMonitor(monitor)
         its, converged = solver.solve(T_h)
+        # if mesh.comm.Get_rank() == 0:
+        #     print(its)
         T_h.x.scatter_forward()
         assert(converged)
 
@@ -254,6 +261,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
                         mode=PETSc.ScatterMode.REVERSE)
         fem.set_bc(b_u, dirichlet_bcs_u)
 
+        # ksp_u.setMonitor(monitor)
         ksp_u.solve(b_u, u_h.vector)
         u_h.x.scatter_forward()
 

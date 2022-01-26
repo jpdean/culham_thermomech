@@ -12,7 +12,7 @@ import thermomech
 
 
 t_end = 750
-num_time_steps = 10
+num_time_steps = 20
 n = 16
 k = 1
 L = 2.0

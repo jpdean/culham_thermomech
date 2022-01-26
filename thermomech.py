@@ -85,6 +85,12 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
     V_T = fem.FunctionSpace(mesh, ("Lagrange", k))
     V_u = fem.VectorFunctionSpace(mesh, ("Lagrange", k))
 
+    if mesh.comm.Get_rank() == 0:
+        num_dofs_global = \
+            V_T.dofmap.index_map.size_global * V_T.dofmap.index_map_bs + \
+            V_u.dofmap.index_map.size_global * V_u.dofmap.index_map_bs
+        print(f"Number of DOFs (global): {num_dofs_global}")
+
     # Time step
     delta_t = fem.Constant(mesh, PETSc.ScalarType(t_end / num_time_steps))
 

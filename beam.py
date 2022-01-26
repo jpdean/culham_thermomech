@@ -75,5 +75,4 @@ def T_i(x): return 293.15 * np.ones_like(x[0])
 
 g = PETSc.ScalarType(- 9.81)
 thermomech.solve(mesh, k, t_end, num_time_steps, T_i, f_T,
-                 f_u, g, materials, material_mt, bcs, bc_mt,
-                 use_iterative_solver=False)
+                 f_u, g, materials, material_mt, bcs, bc_mt)

@@ -79,7 +79,8 @@ def sigma(v, T, T_ref, alpha_L, E, nu):
 
 
 def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
-          materials, material_mt, bcs, bc_mt, use_iterative_solver=True):
+          materials, material_mt, bcs, bc_mt, use_iterative_solver=True,
+          write_to_file=True):
     t = 0.0
     V_T = fem.FunctionSpace(mesh, ("Lagrange", k))
     V_u = fem.VectorFunctionSpace(mesh, ("Lagrange", k))
@@ -87,16 +88,18 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
     # Time step
     delta_t = fem.Constant(mesh, PETSc.ScalarType(t_end / num_time_steps))
 
-    # FIXME Use one file
-    xdmf_file_T = XDMFFile(MPI.COMM_WORLD, "T.xdmf", "w")
-    xdmf_file_u = XDMFFile(MPI.COMM_WORLD, "u.xdmf", "w")
-    xdmf_file_T.write_mesh(mesh)
-    xdmf_file_u.write_mesh(mesh)
+    if write_to_file:
+        # FIXME Use one file
+        xdmf_file_T = XDMFFile(MPI.COMM_WORLD, "T.xdmf", "w")
+        xdmf_file_u = XDMFFile(MPI.COMM_WORLD, "u.xdmf", "w")
+        xdmf_file_T.write_mesh(mesh)
+        xdmf_file_u.write_mesh(mesh)
 
     T_h = fem.Function(V_T)
     T_h.name = "T"
     T_h.interpolate(T_i)
-    xdmf_file_T.write_function(T_h, t)
+    if write_to_file:
+        xdmf_file_T.write_function(T_h, t)
 
     T_n = fem.Function(V_T)
     T_n.x.array[:] = T_h.x.array
@@ -229,7 +232,8 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
     u_h.name = "u"
     ksp_u.solve(b_u, u_h.vector)
     u_h.x.scatter_forward()
-    xdmf_file_u.write_function(u_h, t)
+    if write_to_file:
+        xdmf_file_u.write_function(u_h, t)
 
     for n in range(num_time_steps):
         t += delta_t.value
@@ -265,13 +269,15 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         ksp_u.solve(b_u, u_h.vector)
         u_h.x.scatter_forward()
 
-        xdmf_file_T.write_function(T_h, t)
-        xdmf_file_u.write_function(u_h, t)
+        if write_to_file:
+            xdmf_file_T.write_function(T_h, t)
+            xdmf_file_u.write_function(u_h, t)
 
         T_n.x.array[:] = T_h.x.array
 
-    xdmf_file_T.close()
-    xdmf_file_u.close()
+    if write_to_file:
+        xdmf_file_T.close()
+        xdmf_file_u.close()
 
     return (T_h, u_h)
 

@@ -12,7 +12,7 @@ from dolfinx.nls import NewtonSolver
 
 import ufl
 
-from utils import TimeDependentExpression, create_mesh_tags
+from utils import TimeDependentExpression, create_mesh_tags_from_locators
 
 from contextlib import ExitStack
 
@@ -143,25 +143,22 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         F_u -= ufl.inner(rho * fem.Constant(mesh, g),
                          w[mesh.topology.dim - 1]) * dx(marker)
 
-    ds = ufl.Measure("ds", domain=mesh, subdomain_data=bc_mt)
-
     # Thermal BCs could be time dependent, so keep reference to functions
     bc_funcs_T = []
-    for bc in bcs:
-        if bc["type"] in ["temperature", "heat_flux", "convection"]:
-            func = fem.Function(V_T)
-            func.interpolate(bc["value"])
-            bc_funcs_T.append(func)
+    for bc in bcs["T"]:
+        func = fem.Function(V_T)
+        func.interpolate(bc["value"])
+        bc_funcs_T.append(func)
 
     dirichlet_bcs_T = []
-    dirichlet_bcs_u = []
     # FIXME Make types enums
-    for marker, bc in enumerate(bcs):
+    for marker, bc in enumerate(bcs["T"]):
         bc_type = bc["type"]
+        ds = ufl.Measure("ds", domain=mesh, subdomain_data=bc_mt["T"])
         if bc_type == "temperature":
             facets = np.array(
-                bc_mt.indices[bc_mt.values == marker])
-            dofs = fem.locate_dofs_topological(V_T, bc_mt.dim, facets)
+                bc_mt["T"].indices[bc_mt["T"].values == marker])
+            dofs = fem.locate_dofs_topological(V_T, bc_mt["T"].dim, facets)
             dirichlet_bcs_T.append(
                 fem.dirichletbc(bc_funcs_T[marker], dofs))
         elif bc_type == "heat_flux":
@@ -170,10 +167,18 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
             T_inf = bc_funcs_T[marker]
             h = bc["h"](T_h)
             F_T += delta_t * ufl.inner(h * (T_h - T_inf), v) * ds(marker)
-        elif bc_type == "displacement":
+        else:
+            raise Exception(
+                f"Boundary condition type {bc_type} not recognised")
+
+    dirichlet_bcs_u = []
+    for marker, bc in enumerate(bcs["u"]):
+        bc_type = bc["type"]
+        ds = ufl.Measure("ds", domain=mesh, subdomain_data=bc_mt["u"])
+        if bc_type == "displacement":
             facets = np.array(
-                bc_mt.indices[bc_mt.values == marker])
-            dofs = fem.locate_dofs_topological(V_u, bc_mt.dim, facets)
+                bc_mt["u"].indices[bc_mt["u"].values == marker])
+            dofs = fem.locate_dofs_topological(V_u, bc_mt["u"].dim, facets)
             dirichlet_bcs_u.append(
                 fem.dirichletbc(bc["value"], dofs, V_u))
         elif bc_type == "pressure":
@@ -244,7 +249,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         t += delta_t.value
 
         for marker, bc_func in enumerate(bc_funcs_T):
-            expr = bcs[marker]["value"]
+            expr = bcs["T"][marker]["value"]
             if isinstance(expr, TimeDependentExpression):
                 expr.t = t
                 bc_func.interpolate(expr)
@@ -309,37 +314,42 @@ def main():
     materials.append(mat_dict["Copper"])
     materials.append(mat_dict["CuCrZr"])
 
-    material_mt = create_mesh_tags(
+    material_mt = create_mesh_tags_from_locators(
         mesh,
         [lambda x: x[0] <= L / 4,
          lambda x: np.logical_and(x[0] >= L / 4, x[0] <= L / 2),
          lambda x: x[0] >= L / 2],
         mesh.topology.dim)
 
-    bcs = [{"type": "temperature",
-            "value": lambda x: 293.15 * np.ones_like(x[0])},
-           {"type": "convection",
-            "value": lambda x: 293.15 * np.ones_like(x[0]),
-            "h": lambda T: 5},
-           {"type": "convection",
-            "value": lambda x: 293.15 * np.ones_like(x[0]),
-            "h": mat_dict["water"]["h"]},
-           {"type": "heat_flux",
-            "value": lambda x: 1e5 * np.ones_like(x[0])},
-           {"type": "displacement",
-            "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
-           {"type": "pressure",
-            "value": fem.Constant(mesh, PETSc.ScalarType(-1e6))}]
+    bcs = {}
+    bcs["T"] = [{"type": "temperature",
+                 "value": lambda x: 293.15 * np.ones_like(x[0])},
+                {"type": "convection",
+                 "value": lambda x: 293.15 * np.ones_like(x[0]),
+                 "h": lambda T: 5},
+                {"type": "convection",
+                 "value": lambda x: 293.15 * np.ones_like(x[0]),
+                 "h": mat_dict["water"]["h"]},
+                {"type": "heat_flux",
+                 "value": lambda x: 1e5 * np.ones_like(x[0])}]
+    bcs["u"] = [{"type": "displacement",
+                 "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
+                {"type": "pressure",
+                 "value": fem.Constant(mesh, PETSc.ScalarType(-1e6))}]
 
-    bc_mt = create_mesh_tags(
+    bc_mt = {}
+    bc_mt["T"] = create_mesh_tags_from_locators(
         mesh,
         [lambda x: np.isclose(x[0], 0.0),
          lambda x: np.logical_or(np.isclose(x[1], 0.0),
                                  np.isclose(x[2], 0.0)),
          lambda x: np.logical_or(np.isclose(x[1], w),
                                  np.isclose(x[2], w)),
-         lambda x: np.isclose(x[0], L),
-         lambda x: np.isclose(x[0], 0.0),
+         lambda x: np.isclose(x[0], L)],
+        mesh.topology.dim - 1)
+    bc_mt["u"] = create_mesh_tags_from_locators(
+        mesh,
+        [lambda x: np.isclose(x[0], 0.0),
          lambda x: np.isclose(x[1], w)],
         mesh.topology.dim - 1)
 

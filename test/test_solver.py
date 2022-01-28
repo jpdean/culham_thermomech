@@ -4,7 +4,7 @@ from dolfinx.mesh import create_unit_square
 from dolfinx import fem
 import ufl
 import numpy as np
-from utils import (TimeDependentExpression, create_mesh_tags,
+from utils import (TimeDependentExpression, create_mesh_tags_from_locators,
                    ufl_poly_from_table_data, compute_error_L2_norm,
                    compute_convergence_rate)
 from petsc4py import PETSc
@@ -85,7 +85,7 @@ materials.append({"name": "mat_2",
 def get_material_mt(mesh):
     regions = [lambda x: x[0] <= 0.5,
                lambda x: x[0] >= 0.5]
-    return create_mesh_tags(mesh, regions, mesh.topology.dim)
+    return create_mesh_tags_from_locators(mesh, regions, mesh.topology.dim)
 
 
 # Boundary conditions
@@ -123,28 +123,36 @@ def h(T):
 # Think of nicer way to deal with Robin bc
 # TODO Change "value" to expression
 # TODO Add pressure BC
-bcs = [{"type": "convection",
-        "value": T_inf,
-        "h": h},
-       {"type": "heat_flux",
-        "value": neumann_bc},
-       {"type": "temperature",
-        "value": T_expr},
-       {"type": "temperature",
-        "value": T_expr},
-       {"type": "displacement",
-        "value": np.array([0, 0], dtype=PETSc.ScalarType)}]
+bcs = {}
+bcs["T"] = [{"type": "convection",
+             "value": T_inf,
+             "h": h},
+            {"type": "heat_flux",
+             "value": neumann_bc},
+            {"type": "temperature",
+             "value": T_expr},
+            {"type": "temperature",
+             "value": T_expr}]
+bcs["u"] = [{"type": "displacement",
+             "value": np.array([0, 0], dtype=PETSc.ScalarType)}]
 
 
 def get_bc_mt(mesh):
-    boundaries = [lambda x: np.isclose(x[0], 0),
-                  lambda x: np.isclose(x[0], 1),
-                  lambda x: np.isclose(x[1], 0),
-                  lambda x: np.isclose(x[1], 1),
-                  lambda x: np.logical_or(
-                      np.logical_or(np.isclose(x[0], 0), np.isclose(x[0], 1)),
-                      np.logical_or(np.isclose(x[1], 0), np.isclose(x[1], 1)))]
-    return create_mesh_tags(mesh, boundaries, mesh.topology.dim - 1)
+    bc_mt = {}
+    bc_mt["T"] = create_mesh_tags_from_locators(
+        mesh,
+        [lambda x: np.isclose(x[0], 0),
+         lambda x: np.isclose(x[0], 1),
+         lambda x: np.isclose(x[1], 0),
+         lambda x: np.isclose(x[1], 1)],
+        mesh.topology.dim - 1)
+    bc_mt["u"] = create_mesh_tags_from_locators(
+        mesh,
+        [lambda x: np.logical_or(
+            np.logical_or(np.isclose(x[0], 0), np.isclose(x[0], 1)),
+            np.logical_or(np.isclose(x[1], 0), np.isclose(x[1], 1)))],
+        mesh.topology.dim - 1)
+    return bc_mt
 
 
 def compute_f_u(T_expr, t_end, T_e, u_e, materials):
@@ -182,7 +190,7 @@ def test_temporal_convergence():
     for i in range(len(num_time_steps)):
         T_expr.t = 0
         f_T_expr.t = 0
-        for bc in bcs:
+        for bc in bcs["T"]:
             if isinstance(bc["value"], TimeDependentExpression):
                 bc["value"].t = 0
         (T_h, u_h) = thermomech.solve(mesh, k, t_end, num_time_steps[i],
@@ -222,7 +230,7 @@ def test_spatial_convergence():
 
         T_expr.t = 0
         f_T_expr.t = 0
-        for bc in bcs:
+        for bc in bcs["T"]:
             if isinstance(bc["value"], TimeDependentExpression):
                 bc["value"].t = 0
         # TODO Use refine rather than create new mesh?

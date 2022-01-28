@@ -12,7 +12,7 @@ from dolfinx.nls import NewtonSolver
 
 import ufl
 
-from utils import TimeDependentExpression, create_mesh_tags
+from utils import TimeDependentExpression, create_mesh_tags_from_locators
 
 from contextlib import ExitStack
 
@@ -309,7 +309,7 @@ def main():
     materials.append(mat_dict["Copper"])
     materials.append(mat_dict["CuCrZr"])
 
-    material_mt = create_mesh_tags(
+    material_mt = create_mesh_tags_from_locators(
         mesh,
         [lambda x: x[0] <= L / 4,
          lambda x: np.logical_and(x[0] >= L / 4, x[0] <= L / 2),
@@ -331,7 +331,7 @@ def main():
            {"type": "pressure",
             "value": fem.Constant(mesh, PETSc.ScalarType(-1e6))}]
 
-    bc_mt = create_mesh_tags(
+    bc_mt = create_mesh_tags_from_locators(
         mesh,
         [lambda x: np.isclose(x[0], 0.0),
          lambda x: np.logical_or(np.isclose(x[1], 0.0),

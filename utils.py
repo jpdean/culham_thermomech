@@ -35,7 +35,7 @@ def ufl_poly_from_table_data(x, y, u, degree, num_pieces=1):
     return piecewise_poly
 
 
-def create_mesh_tags(mesh, locators, edim):
+def create_mesh_tags_from_locators(mesh, locators, edim):
     entity_indices, entity_markers = [], []
     # Use index in the `regions` list as the unique marker
     for marker, locator in enumerate(locators):
@@ -44,6 +44,8 @@ def create_mesh_tags(mesh, locators, edim):
         entity_indices.append(entities)
         entity_markers.append(np.full(len(entities), marker))
     entity_indices = np.array(np.hstack(entity_indices), dtype=np.int32)
+    # Check no entities are duplicated
+    assert(len(np.unique(entity_indices)) == len(entity_indices))
     entity_markers = np.array(np.hstack(entity_markers), dtype=np.int32)
     sorted_entities = np.argsort(entity_indices)
     mt = MeshTags(mesh, edim, entity_indices[sorted_entities],

@@ -12,14 +12,18 @@ with XDMFFile(MPI.COMM_WORLD, "csut.xdmf", "r") as f:
     bc_mt = {}
     bc_mt["T"] = f.read_meshtags(mesh, "boundaries_T")
     bc_mt["u"] = f.read_meshtags(mesh, "boundaries_u")
+    material_mt = f.read_meshtags(mesh, "materials")
 
 t_end = 5
 k = 1
 num_time_steps = 1
 
 materials = []
-# FIXME Add all materials
 materials.append(mat_dict["Copper"])
+materials.append(mat_dict["CuCrZr"])
+materials.append(mat_dict["304SS"])
+materials.append(mat_dict["304SS"])
+materials.append(mat_dict["304SS"])
 
 bcs = {}
 bcs["T"] = [{"type": "convection",
@@ -51,5 +55,5 @@ def T_i(x): return 293.15 * np.ones_like(x[0])
 g = PETSc.ScalarType(- 9.81)
 
 solve(mesh, k, t_end, num_time_steps, T_i, f_T,
-      f_u, g, materials, None, bcs, bc_mt,
-      write_to_file=False)
+      f_u, g, materials, material_mt, bcs, bc_mt,
+      write_to_file=True)

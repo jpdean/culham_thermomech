@@ -84,11 +84,9 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
     V_T = fem.FunctionSpace(mesh, ("Lagrange", k))
     V_u = fem.VectorFunctionSpace(mesh, ("Lagrange", k))
 
-    if mesh.comm.Get_rank() == 0:
-        num_dofs_global = \
-            V_T.dofmap.index_map.size_global * V_T.dofmap.index_map_bs + \
-            V_u.dofmap.index_map.size_global * V_u.dofmap.index_map_bs
-        print(f"Number of DOFs (global): {num_dofs_global}")
+    num_dofs_global = \
+        V_T.dofmap.index_map.size_global * V_T.dofmap.index_map_bs + \
+        V_u.dofmap.index_map.size_global * V_u.dofmap.index_map_bs
 
     # Time step
     delta_t = fem.Constant(mesh, PETSc.ScalarType(t_end / num_time_steps))
@@ -252,6 +250,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
     if write_to_file:
         xdmf_file_u.write_function(u_h, t)
 
+    ksp_iters = {"T": [], "u": []}
     for n in range(num_time_steps):
         t += delta_t.value
 
@@ -292,11 +291,15 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
 
         T_n.x.array[:] = T_h.x.array
 
+        ksp_iters["T"].append(ksp_T.its)
+        ksp_iters["u"].append(ksp_u.its)
+
     if write_to_file:
         xdmf_file_T.close()
         xdmf_file_u.close()
 
-    return (T_h, u_h)
+    return {"T": T_h, "u": u_h, "num_dofs_global": num_dofs_global,
+            "ksp_iters": ksp_iters}
 
 
 def main():
@@ -367,8 +370,12 @@ def main():
     def T_i(x): return 293.15 * np.ones_like(x[0])
 
     g = PETSc.ScalarType(- 9.81)
-    solve(mesh, k, t_end, num_time_steps, T_i, f_T,
-          f_u, g, materials, material_mt, bcs, bc_mt)
+    results = solve(mesh, k, t_end, num_time_steps, T_i, f_T,
+                    f_u, g, materials, material_mt, bcs, bc_mt)
+
+    if MPI.COMM_WORLD.Get_rank() == 0:
+        num_dofs_global = results["num_dofs_global"]
+        print(f"Number of DOFs (global) = {num_dofs_global}")
 
 
 if __name__ == "__main__":

@@ -235,14 +235,14 @@ def spatial_convergence(t_end, num_time_steps, k, ns):
 
 
 num_time_steps = [4, 8, 16, 32]
-errors_L2_temp = temporal_convergence(t_end=1.5, n=64, k=1,
+errors_L2_temp = temporal_convergence(t_end=1.5, n=256, k=1,
                                       num_time_steps=num_time_steps)
 r_T_temp = compute_convergence_rate(errors_L2_temp["T"], num_time_steps)
 r_u_temp = compute_convergence_rate(errors_L2_temp["u"], num_time_steps)
 
-ns = [8, 16]
+ns = [4, 8, 16, 32]
 errors_L2_spatial = spatial_convergence(
-    t_end=1.5, num_time_steps=200, k=1, ns=ns)
+    t_end=0.5, num_time_steps=400, k=1, ns=ns)
 r_T_spatial = compute_convergence_rate(errors_L2_spatial["T"], ns)
 r_u_spatial = compute_convergence_rate(errors_L2_spatial["u"], ns)
 

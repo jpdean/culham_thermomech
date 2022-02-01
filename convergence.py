@@ -1,3 +1,5 @@
+# FIXME This duplicates test. TODO Use same code!
+
 import matplotlib.pyplot as plt
 import thermomech
 from mpi4py import MPI

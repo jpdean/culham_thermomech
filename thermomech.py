@@ -223,10 +223,17 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         opts["ksp_type"] = "cg"
         opts["ksp_rtol"] = 1.0e-12
         opts["pc_type"] = "gamg"
+        opts["pc_gamg_type"] = "agg"
+        opts["pc_gamg_agg_nsmooths"] = 1
+        opts["pc_gamg_threshold"] = 0.07
+        opts["pc_gamg_coarse_eq_limit"] = 4000
+        opts["pc_gamg_square_graph"] = 2
+        opts["pc_gamg_reuse_interpolation"] = 1
+        opts["mg_levels_esteig_ksp_type"] = "cg"
         opts["mg_levels_ksp_type"] = "chebyshev"
         opts["mg_levels_pc_type"] = "jacobi"
-        opts["mg_levels_esteig_ksp_type"] = "cg"
-        opts["mg_levels_ksp_chebyshev_esteig_steps"] = 20
+        opts["mg_levels_ksp_chebyshev_esteig_steps"] = 40
+        opts["mg_levels_esteig_ksp_max_it"] = 40
         ksp_u.setFromOptions()
     else:
         ksp_T.setType(PETSc.KSP.Type.PREONLY)

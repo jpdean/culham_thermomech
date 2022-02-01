@@ -14,9 +14,9 @@ with XDMFFile(MPI.COMM_WORLD, "csut.xdmf", "r") as f:
     bc_mt["u"] = f.read_meshtags(mesh, "boundaries_u")
     material_mt = f.read_meshtags(mesh, "materials")
 
-t_end = 5
+t_end = 20
 k = 1
-num_time_steps = 1
+num_time_steps = 4
 
 materials = []
 materials.append(mat_dict["Copper"])
@@ -30,9 +30,9 @@ bcs["T"] = [{"type": "convection",
              "value": lambda x: 293.15 * np.ones_like(x[0]),
              "h": lambda T: 5},
             {"type": "heat_flux",
-             "value": lambda x: 1e5 * np.ones_like(x[0])},
+             "value": lambda x: 1.6e5 * np.ones_like(x[0])},
             {"type": "heat_flux",
-             "value": lambda x: 1e5 * np.ones_like(x[0])},
+             "value": lambda x: 5e5 * np.ones_like(x[0])},
             {"type": "convection",
              "value": lambda x: 293.15 * np.ones_like(x[0]),
              "h": mat_dict["water"]["h"]}]

@@ -193,11 +193,13 @@ def test_temporal_convergence():
         for bc in bcs["T"]:
             if isinstance(bc["value"], TimeDependentExpression):
                 bc["value"].t = 0
-        (T_h, u_h) = thermomech.solve(mesh, k, t_end, num_time_steps[i],
-                                      T_expr, f_T_expr, f_u, g, materials,
-                                      material_mt, bcs, bc_mt)
-        errors_L2["T"].append(compute_error_L2_norm(mesh.comm, T_h, T_e))
-        errors_L2["u"].append(compute_error_L2_norm(mesh.comm, u_h, u_e))
+        results = thermomech.solve(mesh, k, t_end, num_time_steps[i],
+                                   T_expr, f_T_expr, f_u, g, materials,
+                                   material_mt, bcs, bc_mt)
+        errors_L2["T"].append(compute_error_L2_norm(
+            mesh.comm, results["T"], T_e))
+        errors_L2["u"].append(compute_error_L2_norm(
+            mesh.comm, results["u"], u_e))
 
     r_T = compute_convergence_rate(errors_L2["T"], num_time_steps)
     r_u = compute_convergence_rate(errors_L2["u"], num_time_steps)
@@ -237,12 +239,14 @@ def test_spatial_convergence():
         material_mt = get_material_mt(mesh)
         bc_mt = get_bc_mt(mesh)
 
-        (T_h, u_h) = thermomech.solve(mesh, k, t_end, num_time_steps,
-                                      T_expr, f_T_expr, f_u, g, materials,
-                                      material_mt, bcs, bc_mt)
+        results = thermomech.solve(mesh, k, t_end, num_time_steps,
+                                   T_expr, f_T_expr, f_u, g, materials,
+                                   material_mt, bcs, bc_mt)
 
-        errors_L2["T"].append(compute_error_L2_norm(mesh.comm, T_h, T_e))
-        errors_L2["u"].append(compute_error_L2_norm(mesh.comm, u_h, u_e))
+        errors_L2["T"].append(compute_error_L2_norm(
+            mesh.comm, results["T"], T_e))
+        errors_L2["u"].append(compute_error_L2_norm(
+            mesh.comm, results["u"], u_e))
 
     r_T = compute_convergence_rate(errors_L2["T"], ns)
     r_u = compute_convergence_rate(errors_L2["u"], ns)

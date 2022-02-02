@@ -97,8 +97,8 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
 
     if write_to_file:
         # FIXME Use one file
-        xdmf_file_T = XDMFFile(MPI.COMM_WORLD, "T.xdmf", "w")
-        xdmf_file_u = XDMFFile(MPI.COMM_WORLD, "u.xdmf", "w")
+        xdmf_file_T = XDMFFile(mesh.comm, "T.xdmf", "w")
+        xdmf_file_u = XDMFFile(mesh.comm, "u.xdmf", "w")
         xdmf_file_T.write_mesh(mesh)
         xdmf_file_u.write_mesh(mesh)
 
@@ -202,13 +202,13 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
     fem.set_bc(b_u, dirichlet_bcs_u)
 
     non_lin_problem = fem.NonlinearProblem(F_T, T_h, dirichlet_bcs_T)
-    solver = NewtonSolver(MPI.COMM_WORLD, non_lin_problem)
+    solver = NewtonSolver(mesh.comm, non_lin_problem)
     solver.convergence_criterion = "incremental"
     solver.rtol = 1e-6
     solver.report = True
 
     ksp_T = solver.krylov_solver
-    ksp_u = PETSc.KSP().create(MPI.COMM_WORLD)
+    ksp_u = PETSc.KSP().create(mesh.comm)
     ksp_u.setOperators(A_u)
 
     if use_iterative_solver:
@@ -384,7 +384,7 @@ def main():
                     f_u, g, materials, material_mt, bcs, bc_mt)
 
     # TODO Use mesh mesh.comm here and elsewhere
-    if MPI.COMM_WORLD.Get_rank() == 0:
+    if mesh.comm.Get_rank() == 0:
         num_dofs_global = results["num_dofs_global"]
         solve_total_time = results["timing_dict"]["solve_total"]
         print(f"Number of DOFs (global) = {num_dofs_global}")

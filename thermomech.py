@@ -9,6 +9,7 @@ from dolfinx import fem, la
 from dolfinx.mesh import create_box
 from dolfinx.io import XDMFFile
 from dolfinx.nls import NewtonSolver
+from dolfinx.common import Timer
 
 import ufl
 
@@ -80,6 +81,9 @@ def sigma(v, T, T_ref, alpha_L, E, nu):
 def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
           materials, material_mt, bcs, bc_mt, use_iterative_solver=True,
           write_to_file=True):
+    timer_solve_total = Timer("Solve Total")
+    timer_solve_total.start()
+
     t = 0.0
     V_T = fem.FunctionSpace(mesh, ("Lagrange", k))
     V_u = fem.VectorFunctionSpace(mesh, ("Lagrange", k))
@@ -298,8 +302,14 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         xdmf_file_T.close()
         xdmf_file_u.close()
 
+    timer_solve_total.stop()
+    timing_dict = {}
+    # This is the max wall time
+    timing_dict["solve_total"] = mesh.comm.allreduce(
+        timer_solve_total.elapsed()[0], op=MPI.MAX)
+
     return {"T": T_h, "u": u_h, "num_dofs_global": num_dofs_global,
-            "ksp_iters": ksp_iters}
+            "ksp_iters": ksp_iters, "timing_dict": timing_dict}
 
 
 def main():
@@ -373,9 +383,12 @@ def main():
     results = solve(mesh, k, t_end, num_time_steps, T_i, f_T,
                     f_u, g, materials, material_mt, bcs, bc_mt)
 
+    # TODO Use mesh mesh.comm here and elsewhere
     if MPI.COMM_WORLD.Get_rank() == 0:
         num_dofs_global = results["num_dofs_global"]
+        solve_total_time = results["timing_dict"]["solve_total"]
         print(f"Number of DOFs (global) = {num_dofs_global}")
+        print(f"Total solve time = {solve_total_time}")
 
 
 if __name__ == "__main__":

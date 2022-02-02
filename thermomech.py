@@ -320,7 +320,6 @@ def main():
     L = 2.0
     w = 1.0
 
-    # FIXME Mesh does not necessarily align with materials
     mesh = create_box(
         MPI.COMM_WORLD,
         [np.array([0.0, 0.0, 0.0]),
@@ -334,11 +333,14 @@ def main():
     materials.append(mat_dict["Copper"])
     materials.append(mat_dict["CuCrZr"])
 
+    # Make changes in materials align with mesh
+    x_1 = round(n / 4) * L / n
+    x_2 = round(n / 2) * L / n
     material_mt = create_mesh_tags_from_locators(
         mesh,
-        [lambda x: x[0] <= L / 4,
-         lambda x: np.logical_and(x[0] >= L / 4, x[0] <= L / 2),
-         lambda x: x[0] >= L / 2],
+        [lambda x: x[0] <= x_1,
+         lambda x: np.logical_and(x[0] >= x_1, x[0] <= x_2),
+         lambda x: x[0] >= x_2],
         mesh.topology.dim)
 
     bcs = {}

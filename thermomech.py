@@ -303,79 +303,100 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
 
 
 def main():
-    t_end = 750
-    num_time_steps = 10
-    n = 16
+    t_end = 75
+    num_time_steps = 1
     k = 1
     L = 2.0
     w = 1.0
 
-    # FIXME Mesh does not necessarily align with materials
-    mesh = create_box(
-        MPI.COMM_WORLD,
-        [np.array([0.0, 0.0, 0.0]),
-         np.array([L, w, w])],
-        [n, n, n])
+    max_iters = {"T": [], "u": []}
+    dofs = []
+    for n in [16, 32, 64, 128]:
+        # FIXME Mesh does not necessarily align with materials
+        mesh = create_box(
+            MPI.COMM_WORLD,
+            [np.array([0.0, 0.0, 0.0]),
+             np.array([L, w, w])],
+            [n, n, n])
 
-    # TODO Let solver take dictionary of materials instead of list
-    from materials import materials as mat_dict
-    materials = []
-    materials.append(mat_dict["304SS"])
-    materials.append(mat_dict["Copper"])
-    materials.append(mat_dict["CuCrZr"])
+        # TODO Let solver take dictionary of materials instead of list
+        from materials import materials as mat_dict
+        materials = []
+        materials.append(mat_dict["304SS"])
+        materials.append(mat_dict["Copper"])
+        materials.append(mat_dict["CuCrZr"])
 
-    material_mt = create_mesh_tags_from_locators(
-        mesh,
-        [lambda x: x[0] <= L / 4,
-         lambda x: np.logical_and(x[0] >= L / 4, x[0] <= L / 2),
-         lambda x: x[0] >= L / 2],
-        mesh.topology.dim)
+        material_mt = create_mesh_tags_from_locators(
+            mesh,
+            [lambda x: x[0] <= L / 4,
+             lambda x: np.logical_and(x[0] >= L / 4, x[0] <= L / 2),
+             lambda x: x[0] >= L / 2],
+            mesh.topology.dim)
 
-    bcs = {}
-    bcs["T"] = [{"type": "temperature",
-                 "value": lambda x: 293.15 * np.ones_like(x[0])},
-                {"type": "convection",
-                 "value": lambda x: 293.15 * np.ones_like(x[0]),
-                 "h": lambda T: 5},
-                {"type": "convection",
-                 "value": lambda x: 293.15 * np.ones_like(x[0]),
-                 "h": mat_dict["water"]["h"]},
-                {"type": "heat_flux",
-                 "value": lambda x: 1e5 * np.ones_like(x[0])}]
-    bcs["u"] = [{"type": "displacement",
-                 "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
-                {"type": "pressure",
-                 "value": fem.Constant(mesh, PETSc.ScalarType(-1e6))}]
+        bcs = {}
+        bcs["T"] = [{"type": "temperature",
+                    "value": lambda x: 293.15 * np.ones_like(x[0])},
+                    {"type": "convection",
+                    "value": lambda x: 293.15 * np.ones_like(x[0]),
+                     "h": lambda T: 5},
+                    {"type": "convection",
+                    "value": lambda x: 293.15 * np.ones_like(x[0]),
+                     "h": mat_dict["water"]["h"]},
+                    {"type": "heat_flux",
+                    "value": lambda x: 1e5 * np.ones_like(x[0])}]
+        bcs["u"] = [{"type": "displacement",
+                    "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
+                    {"type": "pressure",
+                    "value": fem.Constant(mesh, PETSc.ScalarType(-1e6))}]
 
-    bc_mt = {}
-    bc_mt["T"] = create_mesh_tags_from_locators(
-        mesh,
-        [lambda x: np.isclose(x[0], 0.0),
-         lambda x: np.logical_or(np.isclose(x[1], 0.0),
-                                 np.isclose(x[2], 0.0)),
-         lambda x: np.logical_or(np.isclose(x[1], w),
-                                 np.isclose(x[2], w)),
-         lambda x: np.isclose(x[0], L)],
-        mesh.topology.dim - 1)
-    bc_mt["u"] = create_mesh_tags_from_locators(
-        mesh,
-        [lambda x: np.isclose(x[0], 0.0),
-         lambda x: np.isclose(x[1], w)],
-        mesh.topology.dim - 1)
+        bc_mt = {}
+        bc_mt["T"] = create_mesh_tags_from_locators(
+            mesh,
+            [lambda x: np.isclose(x[0], 0.0),
+             lambda x: np.logical_or(np.isclose(x[1], 0.0),
+                                     np.isclose(x[2], 0.0)),
+             lambda x: np.logical_or(np.isclose(x[1], w),
+                                     np.isclose(x[2], w)),
+             lambda x: np.isclose(x[0], L)],
+            mesh.topology.dim - 1)
+        bc_mt["u"] = create_mesh_tags_from_locators(
+            mesh,
+            [lambda x: np.isclose(x[0], 0.0),
+             lambda x: np.isclose(x[1], w)],
+            mesh.topology.dim - 1)
 
-    f_u = fem.Constant(mesh, np.array([0, 0, 0], dtype=PETSc.ScalarType))
+        f_u = fem.Constant(mesh, np.array([0, 0, 0], dtype=PETSc.ScalarType))
 
-    def f_T(x): return np.zeros_like(x[0])
+        def f_T(x): return np.zeros_like(x[0])
 
-    def T_i(x): return 293.15 * np.ones_like(x[0])
+        def T_i(x): return 293.15 * np.ones_like(x[0])
 
-    g = PETSc.ScalarType(- 9.81)
-    results = solve(mesh, k, t_end, num_time_steps, T_i, f_T,
-                    f_u, g, materials, material_mt, bcs, bc_mt)
+        g = PETSc.ScalarType(- 9.81)
+        results = solve(mesh, k, t_end, num_time_steps, T_i, f_T,
+                        f_u, g, materials, material_mt, bcs, bc_mt)
+
+        dofs.append(results["num_dofs_global"])
+        max_iters["T"].append(np.max(results["ksp_iters"]["T"]))
+        max_iters["u"].append(np.max(results["ksp_iters"]["u"]))
 
     if MPI.COMM_WORLD.Get_rank() == 0:
-        num_dofs_global = results["num_dofs_global"]
-        print(f"Number of DOFs (global) = {num_dofs_global}")
+        print(f"Iters = {max_iters}")
+        print(f"DOFs = {dofs}")
+
+        import matplotlib.pyplot as plt
+        plt.semilogx(dofs, max_iters["T"], "-x")
+        plt.ylim(ymin=0)
+        plt.xlabel("NDOFs")
+        plt.ylabel("Iterations")
+        plt.savefig("T_iters.png")
+        plt.clf()
+
+        plt.semilogx(dofs, max_iters["u"], "-x")
+        plt.ylim(ymin=0)
+        plt.xlabel("NDOFs")
+        plt.ylabel("Iterations")
+        plt.savefig("u_iters.png")
+        plt.clf()
 
 
 if __name__ == "__main__":

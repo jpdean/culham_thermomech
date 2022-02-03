@@ -81,8 +81,11 @@ def sigma(v, T, T_ref, alpha_L, E, nu):
 def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
           materials, material_mt, bcs, bc_mt, use_iterative_solver=True,
           write_to_file=True):
+    timing_dict = {}
     timer_solve_total = Timer("Solve Total")
     timer_solve_total.start()
+    timer_setup = Timer("Setup")
+    timer_setup.start()
 
     t = 0.0
     V_T = fem.FunctionSpace(mesh, ("Lagrange", k))
@@ -254,8 +257,16 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
     if write_to_file:
         xdmf_file_u.write_function(u_h, t)
 
+    timing_dict["setup"] = mesh.comm.allreduce(
+        timer_setup.stop(), op=MPI.MAX)
+    timer_time_steping_loop = Timer("Time stepping loop")
+    timer_time_steping_loop.start()
     ksp_iters = {"T": [], "u": []}
+    timing_dict["time_steps"] = []
+    timer_time_step = Timer("Time step")
     for n in range(num_time_steps):
+        timer_time_step.start()
+
         t += delta_t.value
 
         for marker, bc_func in enumerate(bc_funcs_T):
@@ -298,15 +309,19 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         ksp_iters["T"].append(ksp_T.its)
         ksp_iters["u"].append(ksp_u.its)
 
+        timing_dict["time_steps"].append(mesh.comm.allreduce(
+            timer_time_step.stop(), op=MPI.MAX))
+
+    timing_dict["time_stepping_loop"] = mesh.comm.allreduce(
+        timer_time_steping_loop.stop(), op=MPI.MAX)
+
     if write_to_file:
         xdmf_file_T.close()
         xdmf_file_u.close()
 
-    timer_solve_total.stop()
-    timing_dict = {}
     # This is the max wall time
     timing_dict["solve_total"] = mesh.comm.allreduce(
-        timer_solve_total.elapsed()[0], op=MPI.MAX)
+        timer_solve_total.stop(), op=MPI.MAX)
 
     return {"T": T_h, "u": u_h, "num_dofs_global": num_dofs_global,
             "ksp_iters": ksp_iters, "timing_dict": timing_dict}
@@ -388,9 +403,9 @@ def main():
     # TODO Use mesh mesh.comm here and elsewhere
     if mesh.comm.Get_rank() == 0:
         num_dofs_global = results["num_dofs_global"]
-        solve_total_time = results["timing_dict"]["solve_total"]
+        timing_dict = results["timing_dict"]
         print(f"Number of DOFs (global) = {num_dofs_global}")
-        print(f"Total solve time = {solve_total_time}")
+        print(f"Timings = {timing_dict}")
 
 
 if __name__ == "__main__":

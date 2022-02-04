@@ -404,8 +404,10 @@ def main():
     if mesh.comm.Get_rank() == 0:
         num_dofs_global = results["num_dofs_global"]
         timing_dict = results["timing_dict"]
+        iters = results["ksp_iters"]
         print(f"Number of DOFs (global) = {num_dofs_global}")
         print(f"Timings = {timing_dict}")
+        print(f"Iters = {iters}")
 
 
 if __name__ == "__main__":

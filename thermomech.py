@@ -331,7 +331,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
 def main():
     t_end = 750
     num_time_steps = 10
-    n = 16
+    n = 64
     k = 1
     L = 2.0
     w = 1.0
@@ -401,7 +401,6 @@ def main():
     results = solve(mesh, k, t_end, num_time_steps, T_i, f_T,
                     f_u, g, materials, material_mt, bcs, bc_mt)
 
-    # TODO Use mesh mesh.comm here and elsewhere
     if mesh.comm.Get_rank() == 0:
         num_dofs_global = results["num_dofs_global"]
         timing_dict = results["timing_dict"]

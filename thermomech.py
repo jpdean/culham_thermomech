@@ -83,9 +83,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
           write_to_file=False):
     timing_dict = {}
     timer_solve_total = Timer("Solve Total")
-    timer_solve_total.start()
-    timer_setup = Timer("Setup")
-    timer_setup.start()
+    timer_initial_setup = Timer("Initial setup")
 
     t = 0.0
     V_T = fem.FunctionSpace(mesh, ("Lagrange", k))
@@ -194,20 +192,27 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
     a_u = fem.form(ufl.lhs(F_u))
     L_u = fem.form(ufl.rhs(F_u))
 
+    timing_dict["initial_setup"] = mesh.comm.allreduce(
+        timer_initial_setup.stop(), op=MPI.MAX)
+
+    # Assemble initial elastic problem
+    timer_initial_elastic_assemble = Timer("Initial elastic assemble")
     A_u = fem.assemble_matrix(a_u, bcs=dirichlet_bcs_u)
     A_u.assemble()
-
     b_u = fem.assemble_vector(L_u)
     fem.apply_lifting(b_u, [a_u], bcs=[dirichlet_bcs_u])
     b_u.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
     fem.set_bc(b_u, dirichlet_bcs_u)
+    timing_dict["initial_elastic_assemble"] = mesh.comm.allreduce(
+        timer_initial_elastic_assemble.stop(), op=MPI.MAX)
 
+    # Set up solvers
+    timer_solver_setup = Timer("Solver setup")
     non_lin_problem = fem.NonlinearProblem(F_T, T_h, dirichlet_bcs_T)
     solver = NewtonSolver(mesh.comm, non_lin_problem)
     solver.convergence_criterion = "incremental"
     solver.rtol = 1e-6
     solver.report = True
-
     ksp_T = solver.krylov_solver
     ksp_u = PETSc.KSP().create(mesh.comm)
     ksp_u.setOperators(A_u)
@@ -247,18 +252,21 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
     # viewer = PETSc.Viewer().createASCII("viewer.txt")
     # ksp_T.view(viewer)
     # ksp_u.view(viewer)
+    timing_dict["solver_setup"] = mesh.comm.allreduce(
+        timer_solver_setup.stop(), op=MPI.MAX)
 
+    # Solve intitial elastic problem
+    timer_initial_elastic_solve = Timer("Initial elastic solve")
     u_h = fem.Function(V_u)
     u_h.name = "u"
     ksp_u.solve(b_u, u_h.vector)
     u_h.x.scatter_forward()
     if write_to_file:
         xdmf_file_u.write_function(u_h, t)
+    timing_dict["initial_elastic_solve"] = mesh.comm.allreduce(
+        timer_initial_elastic_solve.stop(), op=MPI.MAX)
 
-    timing_dict["setup"] = mesh.comm.allreduce(
-        timer_setup.stop(), op=MPI.MAX)
     timer_time_steping_loop = Timer("Time stepping loop")
-    timer_time_steping_loop.start()
     iters = {"newton": [], "T": [], "u": []}
     timing_dict["time_steps"] = []
     timer_time_step = Timer("Time step")
@@ -276,6 +284,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
             f_T_expr.t = t
             f_T.interpolate(f_T_expr)
 
+        # Solve thermal problem
         # ksp_T.setMonitor(monitor)
         its, converged = solver.solve(T_h)
         # if mesh.comm.Get_rank() == 0:
@@ -284,6 +293,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         assert(converged)
         iters["newton"].append(its)
 
+        # Solve elastic problem
         A_u.zeroEntries()
         fem.assemble_matrix(A_u, a_u, bcs=dirichlet_bcs_u)
         A_u.assemble()
@@ -294,7 +304,6 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         b_u.ghostUpdate(addv=PETSc.InsertMode.ADD,
                         mode=PETSc.ScatterMode.REVERSE)
         fem.set_bc(b_u, dirichlet_bcs_u)
-
         # ksp_u.setMonitor(monitor)
         ksp_u.solve(b_u, u_h.vector)
         u_h.x.scatter_forward()
@@ -318,7 +327,6 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         xdmf_file_T.close()
         xdmf_file_u.close()
 
-    # This is the max wall time
     timing_dict["solve_total"] = mesh.comm.allreduce(
         timer_solve_total.stop(), op=MPI.MAX)
 
@@ -329,7 +337,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
 def main():
     t_end = 750
     num_time_steps = 10
-    n = 64
+    n = 16
     k = 1
     L = 2.0
     w = 1.0

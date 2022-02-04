@@ -110,24 +110,22 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
     T_h.interpolate(T_i)
     if write_to_file:
         xdmf_file_T.write_function(T_h, t)
-
     T_n = fem.Function(V_T)
     T_n.x.array[:] = T_h.x.array
 
+    # Thermal
     v = ufl.TestFunction(V_T)
-
-    u = ufl.TrialFunction(V_u)
-    w = ufl.TestFunction(V_u)
-
     f_T = fem.Function(V_T)
     f_T.interpolate(f_T_expr)
-
     F_T = - ufl.inner(delta_t * f_T, v) * ufl.dx
+
+    # Elastic
+    u = ufl.TrialFunction(V_u)
+    w = ufl.TestFunction(V_u)
     F_u = - ufl.inner(f_u, w) * ufl.dx
 
     dx = ufl.Measure("dx", domain=mesh, subdomain_data=material_mt)
-
-    # FIXME I think this creates a new kernel for every material
+    # FIXME This creates a new kernel for every domain marker
     for marker, mat in enumerate(materials):
         c = mat["c"](T_h)
         rho = mat["rho"](T_h)

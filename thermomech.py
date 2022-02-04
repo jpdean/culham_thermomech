@@ -261,7 +261,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         timer_setup.stop(), op=MPI.MAX)
     timer_time_steping_loop = Timer("Time stepping loop")
     timer_time_steping_loop.start()
-    ksp_iters = {"T": [], "u": []}
+    iters = {"newton": [], "T": [], "u": []}
     timing_dict["time_steps"] = []
     timer_time_step = Timer("Time step")
     for n in range(num_time_steps):
@@ -284,6 +284,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         #     print(its)
         T_h.x.scatter_forward()
         assert(converged)
+        iters["newton"].append(its)
 
         A_u.zeroEntries()
         fem.assemble_matrix(A_u, a_u, bcs=dirichlet_bcs_u)
@@ -306,8 +307,8 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
 
         T_n.x.array[:] = T_h.x.array
 
-        ksp_iters["T"].append(ksp_T.its)
-        ksp_iters["u"].append(ksp_u.its)
+        iters["T"].append(ksp_T.its)
+        iters["u"].append(ksp_u.its)
 
         timing_dict["time_steps"].append(mesh.comm.allreduce(
             timer_time_step.stop(), op=MPI.MAX))
@@ -324,7 +325,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         timer_solve_total.stop(), op=MPI.MAX)
 
     return {"T": T_h, "u": u_h, "num_dofs_global": num_dofs_global,
-            "ksp_iters": ksp_iters, "timing_dict": timing_dict}
+            "iters": iters, "timing_dict": timing_dict}
 
 
 def main():
@@ -404,7 +405,7 @@ def main():
     if mesh.comm.Get_rank() == 0:
         num_dofs_global = results["num_dofs_global"]
         timing_dict = results["timing_dict"]
-        iters = results["ksp_iters"]
+        iters = results["iters"]
         print(f"Number of DOFs (global) = {num_dofs_global}")
         print(f"Timings = {timing_dict}")
         print(f"Iters = {iters}")

@@ -80,7 +80,7 @@ def sigma(v, T, T_ref, alpha_L, E, nu):
 
 def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
           materials, material_mt, bcs, bc_mt, use_iterative_solver=True,
-          write_to_file=True):
+          write_to_file=False):
     timing_dict = {}
     timer_solve_total = Timer("Solve Total")
     timer_solve_total.start()

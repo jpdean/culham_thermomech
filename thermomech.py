@@ -270,8 +270,11 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         xdmf_file_u.write_function(u_h, t)
 
     timer_time_steping_loop = Timer("Time stepping loop")
-    timing_dict["time_steps"] = []
+    timing_dict["time_steps"] = {"thermal_solve": [], "elastic_solve": [],
+                                 "total": []}
     timer_time_step = Timer("Time step")
+    timer_thermal = Timer("Thermal solve")
+    timer_elastic = Timer("Elastic solve")
     for n in range(num_time_steps):
         timer_time_step.start()
 
@@ -287,8 +290,11 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
             f_T.interpolate(f_T_expr)
 
         # Solve thermal problem
+        timer_thermal.start()
         # ksp_T.setMonitor(monitor)
         its, converged = solver.solve(T_h)
+        timing_dict["time_steps"]["thermal_solve"].append(mesh.comm.allreduce(
+            timer_thermal.stop(), op=MPI.MAX))
         # if mesh.comm.Get_rank() == 0:
         #     print(its)
         T_h.x.scatter_forward()
@@ -307,7 +313,10 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
                         mode=PETSc.ScatterMode.REVERSE)
         fem.set_bc(b_u, dirichlet_bcs_u)
         # ksp_u.setMonitor(monitor)
+        timer_elastic.start()
         ksp_u.solve(b_u, u_h.vector)
+        timing_dict["time_steps"]["elastic_solve"].append(mesh.comm.allreduce(
+            timer_elastic.stop(), op=MPI.MAX))
         u_h.x.scatter_forward()
 
         if write_to_file:
@@ -319,7 +328,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         iters["T"].append(ksp_T.its)
         iters["u"].append(ksp_u.its)
 
-        timing_dict["time_steps"].append(mesh.comm.allreduce(
+        timing_dict["time_steps"]["total"].append(mesh.comm.allreduce(
             timer_time_step.stop(), op=MPI.MAX))
 
     timing_dict["time_stepping_loop"] = mesh.comm.allreduce(

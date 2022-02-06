@@ -233,8 +233,8 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         opts["pc_type"] = "gamg"
         opts["pc_gamg_type"] = "agg"
         opts["pc_gamg_agg_nsmooths"] = 1
-        opts["pc_gamg_threshold"] = 0.07
-        opts["pc_gamg_coarse_eq_limit"] = 4000
+        opts["pc_gamg_threshold"] = 0.02
+        opts["pc_gamg_coarse_eq_limit"] = 1000
         opts["pc_gamg_square_graph"] = 2
         opts["pc_gamg_reuse_interpolation"] = 1
         opts["mg_levels_esteig_ksp_type"] = "cg"

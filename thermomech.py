@@ -255,19 +255,21 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
     timing_dict["solver_setup"] = mesh.comm.allreduce(
         timer_solver_setup.stop(), op=MPI.MAX)
 
+    iters = {"newton": [], "T": [], "u": []}
+
     # Solve intitial elastic problem
-    timer_initial_elastic_solve = Timer("Initial elastic solve")
     u_h = fem.Function(V_u)
     u_h.name = "u"
+    timer_initial_elastic_solve = Timer("Initial elastic solve")
     ksp_u.solve(b_u, u_h.vector)
+    timing_dict["initial_elastic_solve"] = mesh.comm.allreduce(
+        timer_initial_elastic_solve.stop(), op=MPI.MAX)
+    iters["u_init"] = ksp_u.its
     u_h.x.scatter_forward()
     if write_to_file:
         xdmf_file_u.write_function(u_h, t)
-    timing_dict["initial_elastic_solve"] = mesh.comm.allreduce(
-        timer_initial_elastic_solve.stop(), op=MPI.MAX)
 
     timer_time_steping_loop = Timer("Time stepping loop")
-    iters = {"newton": [], "T": [], "u": []}
     timing_dict["time_steps"] = []
     timer_time_step = Timer("Time step")
     for n in range(num_time_steps):

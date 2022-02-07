@@ -220,38 +220,40 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
     if use_iterative_solver:
         # NOTE May need to use GMRES as matrix isn't symmetric due to
         # non-linearity
-        ksp_T.setType(PETSc.KSP.Type.CG)
-        ksp_T.setTolerances(rtol=1.0e-12)
-        ksp_T.getPC().setType(PETSc.PC.Type.HYPRE)
-        ksp_T.getPC().setHYPREType("boomeramg")
+        opts = PETSc.Options()
+        opts[f"{ksp_T.prefix}ksp_type"] = "cg"
+        opts[f"{ksp_T.prefix}ksp_rtol"] = 1.0e-12
+        opts[f"{ksp_T.prefix}pc_type"] = "hypre"
+        opts[f"{ksp_T.prefix}pc_hypre_type"] = "boomeramg"
+        ksp_T.setFromOptions()
+        # ksp_T.view()
 
         null_space = build_nullspace(V_u)
         A_u.setNearNullSpace(null_space)
-        opts = PETSc.Options()
-        opts["ksp_type"] = "cg"
-        opts["ksp_rtol"] = 1.0e-12
-        opts["pc_type"] = "gamg"
-        opts["pc_gamg_type"] = "agg"
-        opts["pc_gamg_agg_nsmooths"] = 1
-        opts["pc_gamg_threshold"] = 0.02
-        opts["pc_gamg_coarse_eq_limit"] = 1000
-        opts["pc_gamg_square_graph"] = 2
-        opts["pc_gamg_reuse_interpolation"] = 1
-        opts["mg_levels_esteig_ksp_type"] = "cg"
-        opts["mg_levels_ksp_type"] = "chebyshev"
-        opts["mg_levels_pc_type"] = "jacobi"
-        opts["mg_levels_ksp_chebyshev_esteig_steps"] = 40
-        opts["mg_levels_esteig_ksp_max_it"] = 40
+        ksp_u.prefix = "ksp_u_"
+        opts[f"{ksp_u.prefix}ksp_type"] = "cg"
+        opts[f"{ksp_u.prefix}ksp_rtol"] = 1.0e-12
+        opts[f"{ksp_u.prefix}pc_type"] = "gamg"
+        opts[f"{ksp_u.prefix}pc_gamg_type"] = "agg"
+        opts[f"{ksp_u.prefix}pc_gamg_agg_nsmooths"] = 1
+        opts[f"{ksp_u.prefix}pc_gamg_threshold"] = 0.02
+        opts[f"{ksp_u.prefix}pc_gamg_coarse_eq_limit"] = 1000
+        opts[f"{ksp_u.prefix}pc_gamg_square_graph"] = 2
+        opts[f"{ksp_u.prefix}pc_gamg_reuse_interpolation"] = 1
+        opts[f"{ksp_u.prefix}mg_levels_esteig_ksp_type"] = "cg"
+        opts[f"{ksp_u.prefix}mg_levels_ksp_type"] = "chebyshev"
+        opts[f"{ksp_u.prefix}mg_levels_pc_type"] = "jacobi"
+        opts[f"{ksp_u.prefix}mg_levels_ksp_chebyshev_esteig_steps"] = 40
+        opts[f"{ksp_u.prefix}mg_levels_esteig_ksp_max_it"] = 40
         ksp_u.setFromOptions()
+        # ksp_u.view()
     else:
         ksp_T.setType(PETSc.KSP.Type.PREONLY)
         ksp_T.getPC().setType(PETSc.PC.Type.LU)
 
         ksp_u.setType(PETSc.KSP.Type.PREONLY)
         ksp_u.getPC().setType(PETSc.PC.Type.LU)
-    # viewer = PETSc.Viewer().createASCII("viewer.txt")
-    # ksp_T.view(viewer)
-    # ksp_u.view(viewer)
+
     timing_dict["solver_setup"] = mesh.comm.allreduce(
         timer_solver_setup.stop(), op=MPI.MAX)
 

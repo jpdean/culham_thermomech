@@ -225,7 +225,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         opts[f"{ksp_T.prefix}ksp_rtol"] = 1.0e-12
         opts[f"{ksp_T.prefix}pc_type"] = "hypre"
         opts[f"{ksp_T.prefix}pc_hypre_type"] = "boomeramg"
-        opts[f"{ksp_T.prefix}pc_hypre_boomeramg_strong_threshold"] = 0.7
+        opts[f"{ksp_T.prefix}pc_hypre_boomeramg_strong_threshold"] = 0.5
         opts[f"{ksp_T.prefix}pc_hypre_boomeramg_agg_nl"] = 4
         opts[f"{ksp_T.prefix}pc_hypre_boomeramg_agg_num_paths"] = 2
         ksp_T.setFromOptions()

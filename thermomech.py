@@ -227,7 +227,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         opts[f"{ksp_T.prefix}ksp_rtol"] = 1.0e-8
         opts[f"{ksp_T.prefix}pc_type"] = "hypre"
         opts[f"{ksp_T.prefix}pc_hypre_type"] = "boomeramg"
-        opts[f"{ksp_T.prefix}pc_hypre_boomeramg_strong_threshold"] = 0.7
+        opts[f"{ksp_T.prefix}pc_hypre_boomeramg_strong_threshold"] = 0.75
         opts[f"{ksp_T.prefix}pc_hypre_boomeramg_agg_nl"] = 4
         opts[f"{ksp_T.prefix}pc_hypre_boomeramg_agg_num_paths"] = 2
         ksp_T.setFromOptions()
@@ -241,15 +241,16 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         opts[f"{ksp_u.prefix}pc_type"] = "gamg"
         opts[f"{ksp_u.prefix}pc_gamg_type"] = "agg"
         opts[f"{ksp_u.prefix}pc_gamg_agg_nsmooths"] = 1
-        opts[f"{ksp_u.prefix}pc_gamg_threshold"] = 0.02
+        opts[f"{ksp_u.prefix}pc_gamg_threshold"] = 0.015
         opts[f"{ksp_u.prefix}pc_gamg_coarse_eq_limit"] = 1000
         opts[f"{ksp_u.prefix}pc_gamg_square_graph"] = 2
+        # TODO Check if I need to update anything
         opts[f"{ksp_u.prefix}pc_gamg_reuse_interpolation"] = 1
         opts[f"{ksp_u.prefix}mg_levels_esteig_ksp_type"] = "cg"
         opts[f"{ksp_u.prefix}mg_levels_ksp_type"] = "chebyshev"
         opts[f"{ksp_u.prefix}mg_levels_pc_type"] = "jacobi"
-        opts[f"{ksp_u.prefix}mg_levels_ksp_chebyshev_esteig_steps"] = 40
-        opts[f"{ksp_u.prefix}mg_levels_esteig_ksp_max_it"] = 40
+        opts[f"{ksp_u.prefix}mg_levels_ksp_chebyshev_esteig_steps"] = 20
+        opts[f"{ksp_u.prefix}mg_levels_esteig_ksp_max_it"] = 20
         ksp_u.setFromOptions()
         # ksp_u.view()
     else:

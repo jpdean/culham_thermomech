@@ -17,6 +17,8 @@ from utils import TimeDependentExpression, create_mesh_tags_from_locators
 
 from contextlib import ExitStack
 
+import json
+
 
 def monitor(ksp, its, rnorm):
     print(f"Iteration: {its}, rel. residual: {rnorm}")
@@ -346,17 +348,34 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
     timing_dict["solve_total"] = mesh.comm.allreduce(
         timer_solve_total.stop(), op=MPI.MAX)
 
-    return {"T": T_h, "u": u_h, "num_dofs_global": num_dofs_global,
-            "iters": iters, "timing_dict": timing_dict}
+    data = {"num_dofs_global": num_dofs_global,
+            "iters": iters,
+            "timing_dict": timing_dict}
+    return {"T": T_h, "u": u_h, "data": data}
 
 
 def main():
-    t_end = 750
-    num_time_steps = 10
-    n = 16
+    # TODO Take command line args
+    scaling_type = None
+    delta_t = 5
+    num_time_steps = 5
     k = 1
     L = 2.0
     w = 1.0
+
+    n_procs = MPI.COMM_WORLD.Get_size()
+    if scaling_type is None:
+        n = 16
+    else:
+        if scaling_type == "weak":
+            n_dofs_per_proc = 500000
+            total_dofs = n_procs * n_dofs_per_proc
+        else:
+            assert(scaling_type == "strong")
+            total_dofs = 20000000
+        n = round((total_dofs / 4)**(1 / 3) - 1)
+
+    t_end = num_time_steps * delta_t
 
     mesh = create_box(
         MPI.COMM_WORLD,
@@ -364,14 +383,13 @@ def main():
          np.array([L, w, w])],
         [n, n, n])
 
-    # TODO Let solver take dictionary of materials instead of list
     from materials import materials as mat_dict
     materials = []
     materials.append(mat_dict["304SS"])
     materials.append(mat_dict["Copper"])
     materials.append(mat_dict["CuCrZr"])
 
-    # Make changes in materials align with mesh
+    # Make materials align with mesh
     x_1 = round(n / 4) * L / n
     x_2 = round(n / 2) * L / n
     material_mt = create_mesh_tags_from_locators(
@@ -424,12 +442,8 @@ def main():
                     f_u, g, materials, material_mt, bcs, bc_mt)
 
     if mesh.comm.Get_rank() == 0:
-        num_dofs_global = results["num_dofs_global"]
-        timing_dict = results["timing_dict"]
-        iters = results["iters"]
-        print(f"Number of DOFs (global) = {num_dofs_global}")
-        print(f"Timings = {timing_dict}")
-        print(f"Iters = {iters}")
+        with open(f"thermomech_{n_procs}.json", "w") as f:
+            json.dump(results["data"], f)
 
 
 if __name__ == "__main__":

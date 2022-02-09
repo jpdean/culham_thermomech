@@ -241,7 +241,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         opts[f"{ksp_u.prefix}pc_type"] = "gamg"
         opts[f"{ksp_u.prefix}pc_gamg_type"] = "agg"
         opts[f"{ksp_u.prefix}pc_gamg_agg_nsmooths"] = 1
-        opts[f"{ksp_u.prefix}pc_gamg_threshold"] = 0.02
+        opts[f"{ksp_u.prefix}pc_gamg_threshold"] = 0.015
         opts[f"{ksp_u.prefix}pc_gamg_coarse_eq_limit"] = 1000
         opts[f"{ksp_u.prefix}pc_gamg_square_graph"] = 2
         opts[f"{ksp_u.prefix}pc_gamg_reuse_interpolation"] = 1

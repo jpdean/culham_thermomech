@@ -80,7 +80,7 @@ def sigma(v, T, T_ref, alpha_L, E, nu):
 
 def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
           materials, material_mt, bcs, bc_mt, use_iterative_solver=True,
-          write_to_file=False):
+          write_to_file=False, steps_per_write=10):
     timing_dict = {}
     timer_solve_total = Timer("Solve Total")
     timer_initial_setup = Timer("Initial setup")
@@ -324,7 +324,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
             timer_elastic.stop(), op=MPI.MAX))
         u_h.x.scatter_forward()
 
-        if write_to_file:
+        if write_to_file and ((n + 1) % steps_per_write == 0):
             xdmf_file_T.write_function(T_h, t)
             xdmf_file_u.write_function(u_h, t)
 

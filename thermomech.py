@@ -224,7 +224,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         # non-linearity
         opts = PETSc.Options()
         opts[f"{ksp_T.prefix}ksp_type"] = "cg"
-        opts[f"{ksp_T.prefix}ksp_rtol"] = 1.0e-12
+        opts[f"{ksp_T.prefix}ksp_rtol"] = 1.0e-8
         opts[f"{ksp_T.prefix}pc_type"] = "hypre"
         opts[f"{ksp_T.prefix}pc_hypre_type"] = "boomeramg"
         opts[f"{ksp_T.prefix}pc_hypre_boomeramg_strong_threshold"] = 0.7
@@ -237,7 +237,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         A_u.setNearNullSpace(null_space)
         ksp_u.prefix = "ksp_u_"
         opts[f"{ksp_u.prefix}ksp_type"] = "cg"
-        opts[f"{ksp_u.prefix}ksp_rtol"] = 1.0e-12
+        opts[f"{ksp_u.prefix}ksp_rtol"] = 1.0e-8
         opts[f"{ksp_u.prefix}pc_type"] = "gamg"
         opts[f"{ksp_u.prefix}pc_gamg_type"] = "agg"
         opts[f"{ksp_u.prefix}pc_gamg_agg_nsmooths"] = 1

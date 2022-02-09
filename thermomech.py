@@ -249,7 +249,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         opts[f"{ksp_u.prefix}mg_levels_ksp_type"] = "chebyshev"
         opts[f"{ksp_u.prefix}mg_levels_pc_type"] = "jacobi"
         opts[f"{ksp_u.prefix}mg_levels_ksp_chebyshev_esteig_steps"] = 20
-        opts[f"{ksp_u.prefix}mg_levels_esteig_ksp_max_it"] = 40
+        opts[f"{ksp_u.prefix}mg_levels_esteig_ksp_max_it"] = 20
         ksp_u.setFromOptions()
         # ksp_u.view()
     else:

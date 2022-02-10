@@ -193,7 +193,8 @@ def test_temporal_convergence():
         for bc in bcs["T"]:
             if isinstance(bc["value"], TimeDependentExpression):
                 bc["value"].t = 0
-        results = thermomech.solve(mesh, k, t_end, num_time_steps[i],
+        delta_t = t_end / num_time_steps[i]
+        results = thermomech.solve(mesh, k, delta_t, num_time_steps[i],
                                    T_expr, f_T_expr, f_u, g, materials,
                                    material_mt, bcs, bc_mt)
         errors_L2["T"].append(compute_error_L2_norm(
@@ -211,6 +212,7 @@ def test_temporal_convergence():
 def test_spatial_convergence():
     t_end = 1.5
     num_time_steps = 200
+    delta_t = t_end / num_time_steps
     k = 1
     errors_L2 = []
     ns = [8, 16]
@@ -239,7 +241,7 @@ def test_spatial_convergence():
         material_mt = get_material_mt(mesh)
         bc_mt = get_bc_mt(mesh)
 
-        results = thermomech.solve(mesh, k, t_end, num_time_steps,
+        results = thermomech.solve(mesh, k, delta_t, num_time_steps,
                                    T_expr, f_T_expr, f_u, g, materials,
                                    material_mt, bcs, bc_mt)
 

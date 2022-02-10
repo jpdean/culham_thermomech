@@ -80,7 +80,7 @@ def sigma(v, T, T_ref, alpha_L, E, nu):
     return 2.0 * mu * eps + lmbda * ufl.tr(eps) * ufl.Identity(len(v))
 
 
-def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
+def solve(mesh, k, delta_t, num_time_steps, T_i, f_T_expr, f_u, g,
           materials, material_mt, bcs, bc_mt, use_iterative_solver=True,
           write_to_file=False, steps_per_write=10):
     timing_dict = {}
@@ -96,7 +96,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         V_u.dofmap.index_map.size_global * V_u.dofmap.index_map_bs
 
     # Time step
-    delta_t = fem.Constant(mesh, PETSc.ScalarType(t_end / num_time_steps))
+    delta_t = fem.Constant(mesh, PETSc.ScalarType(delta_t))
 
     if write_to_file:
         # FIXME Use one file
@@ -377,8 +377,6 @@ def main():
         n_total_dofs = n_procs * n_dofs
     n = round((n_total_dofs / 4)**(1 / 3) - 1)
 
-    t_end = num_time_steps * delta_t
-
     mesh = create_box(
         MPI.COMM_WORLD,
         [np.array([0.0, 0.0, 0.0]),
@@ -434,20 +432,20 @@ def main():
          lambda x: np.isclose(x[1], w)],
         mesh.topology.dim - 1)
 
-    # Elastic source function
+    # Elastic source function (not including gravity)
     f_u = fem.Constant(mesh, np.array([0, 0, 0], dtype=PETSc.ScalarType))
 
     # Thermal source function
     def f_T(x): return np.zeros_like(x[0])
 
     # Initial temperature
-    def T_i(x): return 293.15 * np.ones_like(x[0])
+    def T_0(x): return 293.15 * np.ones_like(x[0])
 
     # Acceleration due to gravity
     g = PETSc.ScalarType(- 9.81)
 
     # Solve the problem
-    results = solve(mesh, k, t_end, num_time_steps, T_i, f_T,
+    results = solve(mesh, k, delta_t, num_time_steps, T_0, f_T,
                     f_u, g, materials, material_mt, bcs, bc_mt)
 
     # Save timing and iteration count data to JSON

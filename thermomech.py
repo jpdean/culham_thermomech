@@ -70,10 +70,13 @@ def build_nullspace(V):
 
 
 def sigma(v, T, T_ref, alpha_L, E, nu):
+    """Compute the stress tensor (elastic and thermal) from displacement"""
     # Elastic strain
     eps_e = ufl.sym(ufl.grad(v))
+    # Thermal strain
     eps_T = alpha_L * (T - T_ref) * ufl.Identity(len(v))
     eps = eps_e - eps_T
+    # Lame parameters
     mu = E / (2.0 * (1.0 + nu))
     lmbda = E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu))
     return 2.0 * mu * eps + lmbda * ufl.tr(eps) * ufl.Identity(len(v))

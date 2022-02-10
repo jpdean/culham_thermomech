@@ -362,7 +362,7 @@ def main():
     n_dofs = 20000
     delta_t = 5
     num_time_steps = 5
-    # Polynomail order
+    # Polynomial order
     k = 1
     # Length of boxmesh
     L = 2.0

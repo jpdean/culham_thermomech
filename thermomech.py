@@ -357,24 +357,25 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
 
 def main():
     # TODO Take command line args
-    scaling_type = None
+    scaling_type = "strong"
+    # Approximate number of DOFS (total for strong scaling, per process for weak)
+    n_dofs = 20000
     delta_t = 5
     num_time_steps = 5
+    # Polynomail order
     k = 1
+    # Length of boxmesh
     L = 2.0
+    # Width of boxmesh
     w = 1.0
 
     n_procs = MPI.COMM_WORLD.Get_size()
-    if scaling_type is None:
-        n = 16
+    if scaling_type == "strong":
+        n_total_dofs = n_dofs
     else:
-        if scaling_type == "weak":
-            n_dofs_per_proc = 500000
-            total_dofs = n_procs * n_dofs_per_proc
-        else:
-            assert(scaling_type == "strong")
-            total_dofs = 20000000
-        n = round((total_dofs / 4)**(1 / 3) - 1)
+        assert(scaling_type == "weak")
+        n_total_dofs = n_procs * n_dofs
+    n = round((n_total_dofs / 4)**(1 / 3) - 1)
 
     t_end = num_time_steps * delta_t
 
@@ -384,13 +385,13 @@ def main():
          np.array([L, w, w])],
         [n, n, n])
 
+    # Materials
     from materials import materials as mat_dict
     materials = []
     materials.append(mat_dict["304SS"])
     materials.append(mat_dict["Copper"])
     materials.append(mat_dict["CuCrZr"])
-
-    # Make materials align with mesh
+    # Create material meshtags, making them align with mesh
     x_1 = round(n / 4) * L / n
     x_2 = round(n / 2) * L / n
     material_mt = create_mesh_tags_from_locators(
@@ -400,6 +401,7 @@ def main():
          lambda x: x[0] >= x_2],
         mesh.topology.dim)
 
+    # Specify boundary conditions
     bcs = {}
     bcs["T"] = [{"type": "temperature",
                  "value": lambda x: 293.15 * np.ones_like(x[0])},
@@ -415,7 +417,7 @@ def main():
                  "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
                 {"type": "pressure",
                  "value": fem.Constant(mesh, PETSc.ScalarType(-1e6))}]
-
+    # Create meshtags for boundary conditions
     bc_mt = {}
     bc_mt["T"] = create_mesh_tags_from_locators(
         mesh,
@@ -432,16 +434,23 @@ def main():
          lambda x: np.isclose(x[1], w)],
         mesh.topology.dim - 1)
 
+    # Elastic source function
     f_u = fem.Constant(mesh, np.array([0, 0, 0], dtype=PETSc.ScalarType))
 
+    # Thermal source function
     def f_T(x): return np.zeros_like(x[0])
 
+    # Initial temperature
     def T_i(x): return 293.15 * np.ones_like(x[0])
 
+    # Acceleration due to gravity
     g = PETSc.ScalarType(- 9.81)
+
+    # Solve the problem
     results = solve(mesh, k, t_end, num_time_steps, T_i, f_T,
                     f_u, g, materials, material_mt, bcs, bc_mt)
 
+    # Save timing and iteration count data to JSON
     if mesh.comm.Get_rank() == 0:
         with open(f"thermomech_{n_procs}.json", "w") as f:
             json.dump(results["data"], f)

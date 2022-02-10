@@ -89,16 +89,18 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
     timer_solve_total = Timer("Solve Total")
     timer_initial_setup = Timer("Initial setup")
 
+    # Simulation time
     t = 0.0
+    # Time step
+    delta_t = fem.Constant(mesh, PETSc.ScalarType(delta_t))
+
+    # Thermal and elastic function spaces
     V_T = fem.FunctionSpace(mesh, ("Lagrange", k))
     V_u = fem.VectorFunctionSpace(mesh, ("Lagrange", k))
 
     num_dofs_global = \
         V_T.dofmap.index_map.size_global * V_T.dofmap.index_map_bs + \
         V_u.dofmap.index_map.size_global * V_u.dofmap.index_map_bs
-
-    # Time step
-    delta_t = fem.Constant(mesh, PETSc.ScalarType(delta_t))
 
     if write_to_file:
         # FIXME Use one file
@@ -107,27 +109,30 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
         xdmf_file_T.write_mesh(mesh)
         xdmf_file_u.write_mesh(mesh)
 
+    # Create temperature unknown and write initial condition to file
     T_h = fem.Function(V_T)
     T_h.name = "T"
     T_h.interpolate(T_0)
     if write_to_file:
         xdmf_file_T.write_function(T_h, t)
+    # Temperature at previous time step
     T_n = fem.Function(V_T)
     T_n.x.array[:] = T_h.x.array
 
-    # Thermal
+    # Thermal problem
     v = ufl.TestFunction(V_T)
     f_T = fem.Function(V_T)
     f_T.interpolate(f_T_expr)
     F_T = - ufl.inner(delta_t * f_T, v) * ufl.dx
 
-    # Elastic
+    # Elastic problem
     u = ufl.TrialFunction(V_u)
     w = ufl.TestFunction(V_u)
     F_u = - ufl.inner(f_u, w) * ufl.dx
 
+    # Loop through materials and add terms
     dx = ufl.Measure("dx", domain=mesh, subdomain_data=material_mt)
-    # FIXME This creates a new kernel for every domain marker
+    # NOTE This creates a new kernel for every domain marker
     for marker, mat in enumerate(materials):
         c = mat["c"](T_h)
         rho = mat["rho"](T_h)
@@ -148,7 +153,8 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
         F_u -= ufl.inner(rho * fem.Constant(mesh, g),
                          w[mesh.topology.dim - 1]) * dx(marker)
 
-    # Thermal BCs could be time dependent, so keep reference to functions
+    # Thermal boundary conditions
+    # NOTE Thermal BCs could be time dependent, so keep reference to functions
     bc_funcs_T = []
     for bc in bcs["T"]:
         func = fem.Function(V_T)
@@ -176,6 +182,7 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
             raise Exception(
                 f"Boundary condition type {bc_type} not recognised")
 
+    # Elastic boundary conditions
     dirichlet_bcs_u = []
     for marker, bc in enumerate(bcs["u"]):
         bc_type = bc["type"]
@@ -193,6 +200,7 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
             raise Exception(
                 f"Boundary condition type {bc_type} not recognised")
 
+    # Create forms for elastic problem
     a_u = fem.form(ufl.lhs(F_u))
     L_u = fem.form(ufl.rhs(F_u))
 
@@ -267,7 +275,7 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
 
     iters = {"newton": [], "T": [], "u": []}
 
-    # Solve intitial elastic problem
+    # Solve initial elastic problem
     u_h = fem.Function(V_u)
     u_h.name = "u"
     timer_initial_elastic_solve = Timer("Initial elastic solve")
@@ -290,6 +298,7 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
 
         t += delta_t.value
 
+        # Update any time dependent functions
         for marker, bc_func in enumerate(bc_funcs_T):
             expr = bcs["T"][marker]["value"]
             if isinstance(expr, TimeDependentExpression):
@@ -305,8 +314,6 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
         its, converged = solver.solve(T_h)
         timing_dict["time_steps"]["thermal_solve"].append(mesh.comm.allreduce(
             timer_thermal.stop(), op=MPI.MAX))
-        # if mesh.comm.Get_rank() == 0:
-        #     print(its)
         T_h.x.scatter_forward()
         assert(converged)
         iters["newton"].append(its)

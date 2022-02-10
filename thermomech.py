@@ -25,7 +25,6 @@ def monitor(ksp, its, rnorm):
 
 
 def build_nullspace(V):
-    # TODO This can be simplified
     """Function to build PETSc nullspace for 2D and 3D elasticity"""
 
     d = V.mesh.topology.dim

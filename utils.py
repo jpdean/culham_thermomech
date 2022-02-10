@@ -1,5 +1,3 @@
-# TODO Add nicer problem specification interface.
-
 import numpy as np
 from dolfinx.mesh import MeshTags, locate_entities
 from dolfinx import fem
@@ -8,12 +6,15 @@ from mpi4py import MPI
 
 
 def ufl_linear_interp(xs, ys, u):
+    """Create a UFL expression that linearly interpolates table data"""
+    # Compute gradients and constants for each piece
     ms = []
     cs = []
     for i in range(len(xs) - 1):
         ms.append((ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i]))
         cs.append(ys[i] - ms[i] * xs[i])
 
+    # Construct interpolant using UFL conditional
     conditions = [ufl.gt(u, x) for x in xs]
     pieces = [m * u + c for (m, c) in zip(ms, cs)]
     # If u < xs[-1], extrapolate using the last piece
@@ -27,10 +28,10 @@ def ufl_linear_interp(xs, ys, u):
     return interp
 
 
-def ufl_poly_from_table_data(x, y, u, degree):
-    """Given a list of point data x and y, this function returns a fitted
+def ufl_poly_from_table_data(xs, ys, u, degree):
+    """Given a list of point data xs and ys, this function returns a fitted
     polynomial of degree `degree` in terms of the UFL `Function` `u`"""
-    coeffs = np.polynomial.Polynomial.fit(x, y, degree).convert().coef
+    coeffs = np.polynomial.Polynomial.fit(xs, ys, degree).convert().coef
     poly = 0
     for n in range(degree + 1):
         poly += coeffs[n] * u**n
@@ -38,6 +39,9 @@ def ufl_poly_from_table_data(x, y, u, degree):
 
 
 def create_mesh_tags_from_locators(mesh, locators, edim):
+    """Given a list of locator lambda functions (i.e.
+    lambda x: np.isclose(x[0], 0.0)), this function returns meshtags
+    for entities of dimension edim"""
     entity_indices, entity_markers = [], []
     # Use index in the `regions` list as the unique marker
     for marker, locator in enumerate(locators):
@@ -56,6 +60,7 @@ def create_mesh_tags_from_locators(mesh, locators, edim):
 
 
 class TimeDependentExpression():
+    """Simple class to represent time dependent functions"""
     def __init__(self, expression):
         self.t = 0
         self.expression = expression
@@ -65,6 +70,7 @@ class TimeDependentExpression():
 
 
 def compute_error_L2_norm(comm, v_h, v):
+    """Compute the L2-norm of the difference between v and v_h"""
     return np.sqrt(comm.allreduce(
         fem.assemble_scalar(fem.form((v_h - v)**2 * ufl.dx)), op=MPI.SUM))
 

@@ -82,7 +82,7 @@ def sigma(v, T, T_ref, alpha_L, E, nu):
     return 2.0 * mu * eps + lmbda * ufl.tr(eps) * ufl.Identity(len(v))
 
 
-def solve(mesh, k, delta_t, num_time_steps, T_i, f_T_expr, f_u, g,
+def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
           materials, material_mt, bcs, bc_mt, use_iterative_solver=True,
           write_to_file=False, steps_per_write=10):
     timing_dict = {}
@@ -109,7 +109,7 @@ def solve(mesh, k, delta_t, num_time_steps, T_i, f_T_expr, f_u, g,
 
     T_h = fem.Function(V_T)
     T_h.name = "T"
-    T_h.interpolate(T_i)
+    T_h.interpolate(T_0)
     if write_to_file:
         xdmf_file_T.write_function(T_h, t)
     T_n = fem.Function(V_T)

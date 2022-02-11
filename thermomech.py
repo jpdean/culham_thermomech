@@ -367,7 +367,8 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
 def main():
     # TODO Take command line args
     scaling_type = "strong"
-    # Approximate number of DOFS (total for strong scaling, per process for weak)
+    # Approximate number of DOFS (total for strong scaling, per process for
+    # weak)
     n_dofs = 20000
     delta_t = 5
     num_time_steps = 5

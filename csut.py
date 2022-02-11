@@ -8,6 +8,11 @@ from thermomech import solve
 import json
 
 
+# Simulation parameters
+delta_t = 5
+num_time_steps = 10
+k = 1
+
 # Load mesh and meshtags
 with XDMFFile(MPI.COMM_WORLD, "csut.xdmf", "r") as f:
     mesh = f.read_mesh()
@@ -16,11 +21,6 @@ with XDMFFile(MPI.COMM_WORLD, "csut.xdmf", "r") as f:
     bc_mt["T"] = f.read_meshtags(mesh, "boundaries_T")
     bc_mt["u"] = f.read_meshtags(mesh, "boundaries_u")
     material_mt = f.read_meshtags(mesh, "materials")
-
-# Simulation parameters
-delta_t = 5
-num_time_steps = 10
-k = 1
 
 # Add materials
 materials = []

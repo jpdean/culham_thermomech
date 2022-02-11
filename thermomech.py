@@ -25,7 +25,6 @@ def monitor(ksp, its, rnorm):
 
 
 def build_nullspace(V):
-    # TODO This can be simplified
     """Function to build PETSc nullspace for 2D and 3D elasticity"""
 
     d = V.mesh.topology.dim
@@ -71,32 +70,37 @@ def build_nullspace(V):
 
 
 def sigma(v, T, T_ref, alpha_L, E, nu):
+    """Compute the stress tensor (elastic and thermal) from displacement"""
     # Elastic strain
     eps_e = ufl.sym(ufl.grad(v))
+    # Thermal strain
     eps_T = alpha_L * (T - T_ref) * ufl.Identity(len(v))
     eps = eps_e - eps_T
+    # Lame parameters
     mu = E / (2.0 * (1.0 + nu))
     lmbda = E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu))
     return 2.0 * mu * eps + lmbda * ufl.tr(eps) * ufl.Identity(len(v))
 
 
-def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
+def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
           materials, material_mt, bcs, bc_mt, use_iterative_solver=True,
           write_to_file=False, steps_per_write=10):
     timing_dict = {}
     timer_solve_total = Timer("Solve Total")
     timer_initial_setup = Timer("Initial setup")
 
+    # Simulation time
     t = 0.0
+    # Time step
+    delta_t = fem.Constant(mesh, PETSc.ScalarType(delta_t))
+
+    # Thermal and elastic function spaces
     V_T = fem.FunctionSpace(mesh, ("Lagrange", k))
     V_u = fem.VectorFunctionSpace(mesh, ("Lagrange", k))
 
     num_dofs_global = \
         V_T.dofmap.index_map.size_global * V_T.dofmap.index_map_bs + \
         V_u.dofmap.index_map.size_global * V_u.dofmap.index_map_bs
-
-    # Time step
-    delta_t = fem.Constant(mesh, PETSc.ScalarType(t_end / num_time_steps))
 
     if write_to_file:
         # FIXME Use one file
@@ -105,27 +109,30 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         xdmf_file_T.write_mesh(mesh)
         xdmf_file_u.write_mesh(mesh)
 
+    # Create temperature unknown and write initial condition to file
     T_h = fem.Function(V_T)
     T_h.name = "T"
-    T_h.interpolate(T_i)
+    T_h.interpolate(T_0)
     if write_to_file:
         xdmf_file_T.write_function(T_h, t)
+    # Temperature at previous time step
     T_n = fem.Function(V_T)
     T_n.x.array[:] = T_h.x.array
 
-    # Thermal
+    # Thermal problem
     v = ufl.TestFunction(V_T)
     f_T = fem.Function(V_T)
     f_T.interpolate(f_T_expr)
     F_T = - ufl.inner(delta_t * f_T, v) * ufl.dx
 
-    # Elastic
+    # Elastic problem
     u = ufl.TrialFunction(V_u)
     w = ufl.TestFunction(V_u)
     F_u = - ufl.inner(f_u, w) * ufl.dx
 
+    # Loop through materials and add terms
     dx = ufl.Measure("dx", domain=mesh, subdomain_data=material_mt)
-    # FIXME This creates a new kernel for every domain marker
+    # NOTE This creates a new kernel for every domain marker
     for marker, mat in enumerate(materials):
         c = mat["c"](T_h)
         rho = mat["rho"](T_h)
@@ -146,7 +153,8 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         F_u -= ufl.inner(rho * fem.Constant(mesh, g),
                          w[mesh.topology.dim - 1]) * dx(marker)
 
-    # Thermal BCs could be time dependent, so keep reference to functions
+    # Thermal boundary conditions
+    # NOTE Thermal BCs could be time dependent, so keep reference to functions
     bc_funcs_T = []
     for bc in bcs["T"]:
         func = fem.Function(V_T)
@@ -174,6 +182,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
             raise Exception(
                 f"Boundary condition type {bc_type} not recognised")
 
+    # Elastic boundary conditions
     dirichlet_bcs_u = []
     for marker, bc in enumerate(bcs["u"]):
         bc_type = bc["type"]
@@ -191,6 +200,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
             raise Exception(
                 f"Boundary condition type {bc_type} not recognised")
 
+    # Create forms for elastic problem
     a_u = fem.form(ufl.lhs(F_u))
     L_u = fem.form(ufl.rhs(F_u))
 
@@ -265,7 +275,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
 
     iters = {"newton": [], "T": [], "u": []}
 
-    # Solve intitial elastic problem
+    # Solve initial elastic problem
     u_h = fem.Function(V_u)
     u_h.name = "u"
     timer_initial_elastic_solve = Timer("Initial elastic solve")
@@ -288,6 +298,7 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
 
         t += delta_t.value
 
+        # Update any time dependent functions
         for marker, bc_func in enumerate(bc_funcs_T):
             expr = bcs["T"][marker]["value"]
             if isinstance(expr, TimeDependentExpression):
@@ -303,8 +314,6 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
         its, converged = solver.solve(T_h)
         timing_dict["time_steps"]["thermal_solve"].append(mesh.comm.allreduce(
             timer_thermal.stop(), op=MPI.MAX))
-        # if mesh.comm.Get_rank() == 0:
-        #     print(its)
         T_h.x.scatter_forward()
         assert(converged)
         iters["newton"].append(its)
@@ -357,26 +366,26 @@ def solve(mesh, k, t_end, num_time_steps, T_i, f_T_expr, f_u, g,
 
 def main():
     # TODO Take command line args
-    scaling_type = None
+    scaling_type = "strong"
+    # Approximate number of DOFS (total for strong scaling, per process for
+    # weak)
+    n_dofs = 20000
     delta_t = 5
     num_time_steps = 5
+    # Polynomial order
     k = 1
+    # Length of boxmesh
     L = 2.0
+    # Width of boxmesh
     w = 1.0
 
     n_procs = MPI.COMM_WORLD.Get_size()
-    if scaling_type is None:
-        n = 16
+    if scaling_type == "strong":
+        n_total_dofs = n_dofs
     else:
-        if scaling_type == "weak":
-            n_dofs_per_proc = 500000
-            total_dofs = n_procs * n_dofs_per_proc
-        else:
-            assert(scaling_type == "strong")
-            total_dofs = 20000000
-        n = round((total_dofs / 4)**(1 / 3) - 1)
-
-    t_end = num_time_steps * delta_t
+        assert(scaling_type == "weak")
+        n_total_dofs = n_procs * n_dofs
+    n = round((n_total_dofs / 4)**(1 / 3) - 1)
 
     mesh = create_box(
         MPI.COMM_WORLD,
@@ -384,13 +393,13 @@ def main():
          np.array([L, w, w])],
         [n, n, n])
 
+    # Materials
     from materials import materials as mat_dict
     materials = []
     materials.append(mat_dict["304SS"])
     materials.append(mat_dict["Copper"])
     materials.append(mat_dict["CuCrZr"])
-
-    # Make materials align with mesh
+    # Create material meshtags, making them align with mesh
     x_1 = round(n / 4) * L / n
     x_2 = round(n / 2) * L / n
     material_mt = create_mesh_tags_from_locators(
@@ -400,6 +409,7 @@ def main():
          lambda x: x[0] >= x_2],
         mesh.topology.dim)
 
+    # Specify boundary conditions
     bcs = {}
     bcs["T"] = [{"type": "temperature",
                  "value": lambda x: 293.15 * np.ones_like(x[0])},
@@ -415,7 +425,7 @@ def main():
                  "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
                 {"type": "pressure",
                  "value": fem.Constant(mesh, PETSc.ScalarType(-1e6))}]
-
+    # Create meshtags for boundary conditions
     bc_mt = {}
     bc_mt["T"] = create_mesh_tags_from_locators(
         mesh,
@@ -432,16 +442,23 @@ def main():
          lambda x: np.isclose(x[1], w)],
         mesh.topology.dim - 1)
 
+    # Elastic source function (not including gravity)
     f_u = fem.Constant(mesh, np.array([0, 0, 0], dtype=PETSc.ScalarType))
 
+    # Thermal source function
     def f_T(x): return np.zeros_like(x[0])
 
-    def T_i(x): return 293.15 * np.ones_like(x[0])
+    # Initial temperature
+    def T_0(x): return 293.15 * np.ones_like(x[0])
 
+    # Acceleration due to gravity
     g = PETSc.ScalarType(- 9.81)
-    results = solve(mesh, k, t_end, num_time_steps, T_i, f_T,
+
+    # Solve the problem
+    results = solve(mesh, k, delta_t, num_time_steps, T_0, f_T,
                     f_u, g, materials, material_mt, bcs, bc_mt)
 
+    # Save timing and iteration count data to JSON
     if mesh.comm.Get_rank() == 0:
         with open(f"thermomech_{n_procs}.json", "w") as f:
             json.dump(results["data"], f)

@@ -11,7 +11,9 @@ import json
 # Simulation parameters
 delta_t = 5
 num_time_steps = 300
-k = 1
+write_to_file = True
+steps_per_write = 25  # Number of time steps per write to file
+k = 1  # Polynomial order
 
 # Load mesh and meshtags
 with XDMFFile(MPI.COMM_WORLD, "csut.xdmf", "r") as f:
@@ -67,7 +69,7 @@ g = PETSc.ScalarType(- 9.81)
 # Solve the problem
 results = solve(mesh, k, delta_t, num_time_steps, T_0, f_T,
                 f_u, g, materials, material_mt, bcs, bc_mt,
-                write_to_file=True, steps_per_write=25)
+                write_to_file=write_to_file, steps_per_write=steps_per_write)
 
 # Write timing and iteration data to file
 n_procs = MPI.COMM_WORLD.Get_size()

@@ -10,7 +10,7 @@ import json
 
 # Simulation parameters
 delta_t = 5
-num_time_steps = 10
+num_time_steps = 300
 k = 1
 
 # Load mesh and meshtags
@@ -67,7 +67,7 @@ g = PETSc.ScalarType(- 9.81)
 # Solve the problem
 results = solve(mesh, k, delta_t, num_time_steps, T_0, f_T,
                 f_u, g, materials, material_mt, bcs, bc_mt,
-                write_to_file=True, steps_per_write=1)
+                write_to_file=True, steps_per_write=25)
 
 # Write timing and iteration data to file
 n_procs = MPI.COMM_WORLD.Get_size()

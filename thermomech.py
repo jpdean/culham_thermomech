@@ -35,7 +35,7 @@ def build_nullspace(V):
     if d == 2:
         num_basis_vecs = 3
     else:
-        assert(d == 3)
+        assert (d == 3)
         num_basis_vecs = 6
     ns = [la.create_petsc_vector(index_map, bs) for i in range(num_basis_vecs)]
     with ExitStack() as stack:
@@ -316,7 +316,7 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
         timing_dict["time_steps"]["thermal_solve"].append(mesh.comm.allreduce(
             timer_thermal.stop(), op=MPI.MAX))
         T_h.x.scatter_forward()
-        assert(converged)
+        assert (converged)
         iters["newton"].append(its)
 
         # Solve elastic problem
@@ -384,7 +384,7 @@ def main():
     if scaling_type == "strong":
         n_total_dofs = n_dofs
     else:
-        assert(scaling_type == "weak")
+        assert (scaling_type == "weak")
         n_total_dofs = n_procs * n_dofs
     n = round((n_total_dofs / 4)**(1 / 3) - 1)
 

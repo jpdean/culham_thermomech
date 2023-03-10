@@ -201,8 +201,8 @@ def test_temporal_convergence():
     r_T = compute_convergence_rate(errors_L2["T"], num_time_steps)
     r_u = compute_convergence_rate(errors_L2["u"], num_time_steps)
 
-    assert(np.isclose(r_T, 1.0, atol=0.1))
-    assert(np.isclose(r_u, 1.0, atol=0.1))
+    assert (np.isclose(r_T, 1.0, atol=0.1))
+    assert (np.isclose(r_u, 1.0, atol=0.1))
 
 
 def test_spatial_convergence():
@@ -249,8 +249,8 @@ def test_spatial_convergence():
     r_T = compute_convergence_rate(errors_L2["T"], ns)
     r_u = compute_convergence_rate(errors_L2["u"], ns)
 
-    assert(np.isclose(r_T, 2.0, atol=0.1))
-    assert(np.isclose(r_u, 2.0, atol=0.1))
+    assert (np.isclose(r_T, 2.0, atol=0.1))
+    assert (np.isclose(r_u, 2.0, atol=0.1))
 
 
 test_spatial_convergence()

@@ -51,7 +51,7 @@ def create_mesh_tags_from_locators(mesh, locators, edim):
         entity_markers.append(np.full(len(entities), marker))
     entity_indices = np.array(np.hstack(entity_indices), dtype=np.int32)
     # Check no entities are duplicated
-    assert(len(np.unique(entity_indices)) == len(entity_indices))
+    assert (len(np.unique(entity_indices)) == len(entity_indices))
     entity_markers = np.array(np.hstack(entity_markers), dtype=np.int32)
     sorted_entities = np.argsort(entity_indices)
     mt = meshtags(mesh, edim, entity_indices[sorted_entities],
@@ -61,6 +61,7 @@ def create_mesh_tags_from_locators(mesh, locators, edim):
 
 class TimeDependentExpression():
     """Simple class to represent time dependent functions"""
+
     def __init__(self, expression):
         self.t = 0
         self.expression = expression

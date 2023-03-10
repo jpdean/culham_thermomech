@@ -8,7 +8,7 @@ from petsc4py import PETSc
 from dolfinx import fem, la
 from dolfinx.mesh import create_box
 from dolfinx.io import XDMFFile
-from dolfinx.nls import NewtonSolver
+from dolfinx.nls.petsc import NewtonSolver
 from dolfinx.common import Timer
 
 import ufl
@@ -119,19 +119,20 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
     T_n = fem.Function(V_T)
     T_n.x.array[:] = T_h.x.array
 
+    dx = ufl.Measure("dx", domain=mesh, subdomain_data=material_mt)
+
     # Thermal problem
     v = ufl.TestFunction(V_T)
     f_T = fem.Function(V_T)
     f_T.interpolate(f_T_expr)
-    F_T = - ufl.inner(delta_t * f_T, v) * ufl.dx
+    F_T = - ufl.inner(delta_t * f_T, v) * dx
 
     # Elastic problem
     u = ufl.TrialFunction(V_u)
     w = ufl.TestFunction(V_u)
-    F_u = - ufl.inner(f_u, w) * ufl.dx
+    F_u = - ufl.inner(f_u, w) * dx
 
     # Loop through materials and add terms
-    dx = ufl.Measure("dx", domain=mesh, subdomain_data=material_mt)
     # NOTE This creates a new kernel for every domain marker
     for marker, mat in enumerate(materials):
         c = mat["c"](T_h)
@@ -209,9 +210,9 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
 
     # Assemble initial elastic problem
     timer_initial_elastic_assemble = Timer("Initial elastic assemble")
-    A_u = fem.assemble_matrix(a_u, bcs=dirichlet_bcs_u)
+    A_u = fem.petsc.assemble_matrix(a_u, bcs=dirichlet_bcs_u)
     A_u.assemble()
-    b_u = fem.assemble_vector(L_u)
+    b_u = fem.petsc.assemble_vector(L_u)
     fem.apply_lifting(b_u, [a_u], bcs=[dirichlet_bcs_u])
     b_u.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
     fem.set_bc(b_u, dirichlet_bcs_u)
@@ -220,7 +221,7 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
 
     # Set up solvers
     timer_solver_setup = Timer("Solver setup")
-    non_lin_problem = fem.NonlinearProblem(F_T, T_h, dirichlet_bcs_T)
+    non_lin_problem = fem.petsc.NonlinearProblem(F_T, T_h, dirichlet_bcs_T)
     solver = NewtonSolver(mesh.comm, non_lin_problem)
     solver.convergence_criterion = "incremental"
     solver.rtol = 1e-6
@@ -320,11 +321,11 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
 
         # Solve elastic problem
         A_u.zeroEntries()
-        fem.assemble_matrix(A_u, a_u, bcs=dirichlet_bcs_u)
+        fem.petsc.assemble_matrix(A_u, a_u, bcs=dirichlet_bcs_u)
         A_u.assemble()
         with b_u.localForm() as b_u_loc:
             b_u_loc.set(0)
-        fem.assemble_vector(b_u, L_u)
+        fem.petsc.assemble_vector(b_u, L_u)
         fem.apply_lifting(b_u, [a_u], bcs=[dirichlet_bcs_u])
         b_u.ghostUpdate(addv=PETSc.InsertMode.ADD,
                         mode=PETSc.ScatterMode.REVERSE)

@@ -251,3 +251,6 @@ def test_spatial_convergence():
 
     assert(np.isclose(r_T, 2.0, atol=0.1))
     assert(np.isclose(r_u, 2.0, atol=0.1))
+
+
+test_spatial_convergence()

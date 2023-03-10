@@ -1,5 +1,5 @@
 import numpy as np
-from dolfinx.mesh import MeshTags, locate_entities
+from dolfinx.mesh import meshtags, locate_entities
 from dolfinx import fem
 import ufl
 from mpi4py import MPI
@@ -54,7 +54,7 @@ def create_mesh_tags_from_locators(mesh, locators, edim):
     assert(len(np.unique(entity_indices)) == len(entity_indices))
     entity_markers = np.array(np.hstack(entity_markers), dtype=np.int32)
     sorted_entities = np.argsort(entity_indices)
-    mt = MeshTags(mesh, edim, entity_indices[sorted_entities],
+    mt = meshtags(mesh, edim, entity_indices[sorted_entities],
                   entity_markers[sorted_entities])
     return mt
 

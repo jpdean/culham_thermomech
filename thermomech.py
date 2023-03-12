@@ -6,7 +6,7 @@ from mpi4py import MPI
 from petsc4py import PETSc
 
 from dolfinx import fem, la
-from dolfinx.mesh import create_box
+from dolfinx.mesh import create_box, create_submesh
 from dolfinx.io import XDMFFile
 from dolfinx.nls.petsc import NewtonSolver
 from dolfinx.common import Timer
@@ -154,18 +154,36 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
         F_u -= ufl.inner(rho * fem.Constant(mesh, g),
                          w[mesh.topology.dim - 1]) * dx(marker)
 
-    # Thermal boundary conditions
-    # NOTE Thermal BCs could be time dependent, so keep reference to functions
-    bc_funcs_T = []
-    for bc in bcs["T"]:
-        func = fem.Function(V_T)
-        func.interpolate(bc["value"])
-        bc_funcs_T.append(func)
+    fdim = mesh.topology.dim - 1
+    facet_imap = mesh.topology.index_map(fdim)
+    num_facets = facet_imap.size_local + facet_imap.num_ghosts
 
+    # Thermal boundary conditions
+    bc_funcs_T = []
     dirichlet_bcs_T = []
+    entity_maps = {}
     # FIXME Make types enums
     for marker, bc in enumerate(bcs["T"]):
         bc_type = bc["type"]
+
+        if bc_type == "heat_flux":
+            bc_facets = bc_mt["T"].indices[bc_mt["T"].values == marker]
+            submsh, submsh_to_msh = create_submesh(
+                mesh, bc_mt["T"].dim, bc_facets)[:2]
+            V_T_sm = fem.FunctionSpace(submsh, ("Lagrange", k))
+            func = fem.Function(V_T_sm)
+
+            msh_to_submsh = np.full(num_facets, -1)
+            msh_to_submsh[submsh_to_msh] = np.arange(len(submsh_to_msh))
+            entity_maps[submsh] = msh_to_submsh
+        else:
+            func = fem.Function(V_T)
+
+        func.interpolate(bc["value"])
+        # NOTE Thermal BCs could be time dependent, so keep reference
+        # to functions
+        bc_funcs_T.append(func)
+
         ds = ufl.Measure("ds", domain=mesh, subdomain_data=bc_mt["T"])
         if bc_type == "temperature":
             facets = np.array(
@@ -221,7 +239,8 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
 
     # Set up solvers
     timer_solver_setup = Timer("Solver setup")
-    non_lin_problem = fem.petsc.NonlinearProblem(F_T, T_h, dirichlet_bcs_T)
+    non_lin_problem = fem.petsc.NonlinearProblem(
+        F_T, T_h, dirichlet_bcs_T, entity_maps=entity_maps)
     solver = NewtonSolver(mesh.comm, non_lin_problem)
     solver.convergence_criterion = "incremental"
     solver.rtol = 1e-6

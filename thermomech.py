@@ -43,7 +43,7 @@ def build_nullspace(V):
         basis = [np.asarray(x) for x in vec_local]
 
         # Get dof indices for each subspace
-        dofs = [V.sub(i).dofmap.list.array for i in range(d)]
+        dofs = [V.sub(i).dofmap.list.flatten() for i in range(d)]
 
         # Build translational nullspace basis
         for i in range(d):
@@ -51,7 +51,7 @@ def build_nullspace(V):
 
         # Build rotational nullspace basis
         x = V.tabulate_dof_coordinates()
-        dofs_block = V.dofmap.list.array
+        dofs_block = V.dofmap.list.flatten()
         x0 = x[dofs_block, 0]
         x1 = x[dofs_block, 1]
         basis[d][dofs[0]] = -x1

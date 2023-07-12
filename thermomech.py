@@ -156,15 +156,15 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
 
     # Thermal boundary conditions
     # NOTE Thermal BCs could be time dependent, so keep reference to functions
-    bc_funcs_T = []
-    for bc in bcs["T"]:
+    bc_funcs_T = {}
+    for marker, bc in bcs["T"].items():
         func = fem.Function(V_T)
         func.interpolate(bc["value"])
-        bc_funcs_T.append(func)
+        bc_funcs_T[marker] = func
 
     dirichlet_bcs_T = []
     # FIXME Make types enums
-    for marker, bc in enumerate(bcs["T"]):
+    for marker, bc in bcs["T"].items():
         bc_type = bc["type"]
         ds = ufl.Measure("ds", domain=mesh, subdomain_data=bc_mt["T"])
         if bc_type == "temperature":
@@ -185,7 +185,7 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
 
     # Elastic boundary conditions
     dirichlet_bcs_u = []
-    for marker, bc in enumerate(bcs["u"]):
+    for marker, bc in bcs["u"].items():
         bc_type = bc["type"]
         ds = ufl.Measure("ds", domain=mesh, subdomain_data=bc_mt["u"])
         if bc_type == "displacement":
@@ -411,29 +411,29 @@ def main():
 
     # Specify boundary conditions
     bcs = {}
-    bcs["T"] = [{"type": "temperature",
-                 "value": lambda x: 293.15 * np.ones_like(x[0])},
-                {"type": "convection",
-                 "value": lambda x: 293.15 * np.ones_like(x[0]),
-                 "h": lambda T: 5},
-                {"type": "convection",
-                 "value": lambda x: 293.15 * np.ones_like(x[0]),
-                 "h": mat_dict["water"]["h"]},
-                {"type": "heat_flux",
-                 "value": lambda x: 1e5 * np.ones_like(x[0])}]
-    bcs["u"] = [{"type": "displacement",
-                 "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
-                {"type": "pressure",
-                 "value": fem.Constant(mesh, PETSc.ScalarType(-1e6))}]
+    bcs["T"] = {0: {"type": "temperature",
+                    "value": lambda x: 293.15 * np.ones_like(x[0])},
+                1: {"type": "convection",
+                    "value": lambda x: 293.15 * np.ones_like(x[0]),
+                    "h": lambda T: 5},
+                2: {"type": "convection",
+                    "value": lambda x: 293.15 * np.ones_like(x[0]),
+                    "h": mat_dict["water"]["h"]},
+                3: {"type": "heat_flux",
+                    "value": lambda x: 1e5 * np.ones_like(x[0])}}
+    bcs["u"] = {0: {"type": "displacement",
+                    "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
+                1: {"type": "pressure",
+                    "value": fem.Constant(mesh, PETSc.ScalarType(-1e6))}}
     # Create meshtags for boundary conditions
     bc_mt = {}
     bc_mt["T"] = create_mesh_tags_from_locators(
         mesh,
         {0: lambda x: np.isclose(x[0], 0.0),
          1: lambda x: np.logical_or(np.isclose(x[1], 0.0),
-                                 np.isclose(x[2], 0.0)),
+                                    np.isclose(x[2], 0.0)),
          2: lambda x: np.logical_or(np.isclose(x[1], w),
-                                 np.isclose(x[2], w)),
+                                    np.isclose(x[2], w)),
          3: lambda x: np.isclose(x[0], L)},
         mesh.topology.dim - 1)
     bc_mt["u"] = create_mesh_tags_from_locators(

@@ -300,7 +300,7 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
         t += delta_t.value
 
         # Update any time dependent functions
-        for marker, bc_func in enumerate(bc_funcs_T):
+        for marker, bc_func in bc_funcs_T.items():
             expr = bcs["T"][marker]["value"]
             if isinstance(expr, TimeDependentExpression):
                 expr.t = t

@@ -61,28 +61,27 @@ def kappa(T):
 
 
 # Create two materials (mat_1 is a numpy polynomial fit of mat_2)
-materials = []
-materials.append({"name": "mat_1",
-                  "c": c,
-                  "rho": rho,
-                  "kappa": kappa,
-                  "nu": 0.33,
-                  "E": lambda T: 1.0 + 0.1 * T**2,
-                  "thermal_strain": (lambda T: 0.1 + 0.01 * T**3,
-                                     1.5)})
-materials.append({"name": "mat_2",
-                  "c": lambda T: 1.3 + T**2,
-                  "rho": lambda T: 2.7 + T**2,
-                  "kappa": lambda T: 4.1 + T**2,
-                  "nu": 0.33,
-                  "E": lambda T: 1.0 + 0.1 * T**2,
-                  "thermal_strain": (lambda T: 0.1 + 0.01 * T**3,
-                                     1.5)})
+materials = {0: {"name": "mat_1",
+                 "c": c,
+                 "rho": rho,
+                 "kappa": kappa,
+                 "nu": 0.33,
+                 "E": lambda T: 1.0 + 0.1 * T**2,
+                 "thermal_strain": (lambda T: 0.1 + 0.01 * T**3,
+                                    1.5)},
+             1: {"name": "mat_2",
+                 "c": lambda T: 1.3 + T**2,
+                 "rho": lambda T: 2.7 + T**2,
+                 "kappa": lambda T: 4.1 + T**2,
+                 "nu": 0.33,
+                 "E": lambda T: 1.0 + 0.1 * T**2,
+                 "thermal_strain": (lambda T: 0.1 + 0.01 * T**3,
+                                    1.5)}}
 
 
 def get_material_mt(mesh):
-    regions = [lambda x: x[0] <= 0.5,
-               lambda x: x[0] >= 0.5]
+    regions = {0: lambda x: x[0] <= 0.5,
+               1: lambda x: x[0] >= 0.5}
     return create_mesh_tags_from_locators(mesh, regions, mesh.topology.dim)
 
 
@@ -120,33 +119,33 @@ def h(T):
 # Think of nicer way to deal with Robin bc
 # TODO Add pressure BC
 bcs = {}
-bcs["T"] = [{"type": "convection",
-             "value": T_inf,
-             "h": h},
-            {"type": "heat_flux",
-             "value": neumann_bc},
-            {"type": "temperature",
-             "value": T_expr},
-            {"type": "temperature",
-             "value": T_expr}]
-bcs["u"] = [{"type": "displacement",
-             "value": np.array([0, 0], dtype=PETSc.ScalarType)}]
+bcs["T"] = {0: {"type": "convection",
+                "value": T_inf,
+                "h": h},
+            1: {"type": "heat_flux",
+                "value": neumann_bc},
+            2: {"type": "temperature",
+                "value": T_expr},
+            3: {"type": "temperature",
+                "value": T_expr}}
+bcs["u"] = {0: {"type": "displacement",
+                "value": np.array([0, 0], dtype=PETSc.ScalarType)}}
 
 
 def get_bc_mt(mesh):
     bc_mt = {}
     bc_mt["T"] = create_mesh_tags_from_locators(
         mesh,
-        [lambda x: np.isclose(x[0], 0),
-         lambda x: np.isclose(x[0], 1),
-         lambda x: np.isclose(x[1], 0),
-         lambda x: np.isclose(x[1], 1)],
+        {0: lambda x: np.isclose(x[0], 0),
+         1: lambda x: np.isclose(x[0], 1),
+         2: lambda x: np.isclose(x[1], 0),
+         3: lambda x: np.isclose(x[1], 1)},
         mesh.topology.dim - 1)
     bc_mt["u"] = create_mesh_tags_from_locators(
         mesh,
-        [lambda x: np.logical_or(
+        {0: lambda x: np.logical_or(
             np.logical_or(np.isclose(x[0], 0), np.isclose(x[0], 1)),
-            np.logical_or(np.isclose(x[1], 0), np.isclose(x[1], 1)))],
+            np.logical_or(np.isclose(x[1], 0), np.isclose(x[1], 1)))},
         mesh.topology.dim - 1)
     return bc_mt
 
@@ -186,7 +185,7 @@ def test_temporal_convergence():
     for i in range(len(num_time_steps)):
         T_expr.t = 0
         f_T_expr.t = 0
-        for bc in bcs["T"]:
+        for bc in bcs["T"].values():
             if isinstance(bc["value"], TimeDependentExpression):
                 bc["value"].t = 0
         delta_t = t_end / num_time_steps[i]
@@ -230,7 +229,7 @@ def test_spatial_convergence():
 
         T_expr.t = 0
         f_T_expr.t = 0
-        for bc in bcs["T"]:
+        for bc in bcs["T"].values():
             if isinstance(bc["value"], TimeDependentExpression):
                 bc["value"].t = 0
         # TODO Use refine rather than create new mesh?
@@ -251,6 +250,3 @@ def test_spatial_convergence():
 
     assert (np.isclose(r_T, 2.0, atol=0.1))
     assert (np.isclose(r_u, 2.0, atol=0.1))
-
-
-test_spatial_convergence()

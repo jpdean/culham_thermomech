@@ -44,7 +44,7 @@ def create_mesh_tags_from_locators(mesh, locators, edim):
     for entities of dimension edim"""
     entity_indices, entity_markers = [], []
     # Use index in the `regions` list as the unique marker
-    for marker, locator in enumerate(locators):
+    for marker, locator in locators.items():
         # TODO Use locate_entities_boundary for boundaries?
         entities = locate_entities(mesh, edim, locator)
         entity_indices.append(entities)

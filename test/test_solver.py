@@ -60,29 +60,37 @@ def kappa(T):
     return ufl_poly_from_table_data(x, y, T, 2)
 
 
+volume_ids = {"volume_0": 8,
+              "volume_1": 2}
+boundary_ids = {}
+boundary_ids["T"] = {"boundary_0": 9,
+                     "boundary_1": 5,
+                     "boundary_2": 6,
+                     "boundary_3": 8}
+boundary_ids["u"] = {"boundary_0": 1}
+
 # Create two materials (mat_1 is a numpy polynomial fit of mat_2)
-materials = []
-materials.append({"name": "mat_1",
-                  "c": c,
-                  "rho": rho,
-                  "kappa": kappa,
-                  "nu": 0.33,
-                  "E": lambda T: 1.0 + 0.1 * T**2,
-                  "thermal_strain": (lambda T: 0.1 + 0.01 * T**3,
-                                     1.5)})
-materials.append({"name": "mat_2",
-                  "c": lambda T: 1.3 + T**2,
-                  "rho": lambda T: 2.7 + T**2,
-                  "kappa": lambda T: 4.1 + T**2,
-                  "nu": 0.33,
-                  "E": lambda T: 1.0 + 0.1 * T**2,
-                  "thermal_strain": (lambda T: 0.1 + 0.01 * T**3,
-                                     1.5)})
+materials = {volume_ids["volume_0"]: {"name": "mat_1",
+                                      "c": c,
+                                      "rho": rho,
+                                      "kappa": kappa,
+                                      "nu": 0.33,
+                                      "E": lambda T: 1.0 + 0.1 * T**2,
+                                      "thermal_strain": (lambda T: 0.1 + 0.01 * T**3,
+                                                         1.5)},
+             volume_ids["volume_1"]: {"name": "mat_2",
+                                      "c": lambda T: 1.3 + T**2,
+                                      "rho": lambda T: 2.7 + T**2,
+                                      "kappa": lambda T: 4.1 + T**2,
+                                      "nu": 0.33,
+                                      "E": lambda T: 1.0 + 0.1 * T**2,
+                                      "thermal_strain": (lambda T: 0.1 + 0.01 * T**3,
+                                                         1.5)}}
 
 
 def get_material_mt(mesh):
-    regions = [lambda x: x[0] <= 0.5,
-               lambda x: x[0] >= 0.5]
+    regions = {volume_ids["volume_0"]: lambda x: x[0] <= 0.5,
+               volume_ids["volume_1"]: lambda x: x[0] >= 0.5}
     return create_mesh_tags_from_locators(mesh, regions, mesh.topology.dim)
 
 
@@ -120,33 +128,33 @@ def h(T):
 # Think of nicer way to deal with Robin bc
 # TODO Add pressure BC
 bcs = {}
-bcs["T"] = [{"type": "convection",
-             "value": T_inf,
-             "h": h},
-            {"type": "heat_flux",
-             "value": neumann_bc},
-            {"type": "temperature",
-             "value": T_expr},
-            {"type": "temperature",
-             "value": T_expr}]
-bcs["u"] = [{"type": "displacement",
-             "value": np.array([0, 0], dtype=PETSc.ScalarType)}]
+bcs["T"] = {boundary_ids["T"]["boundary_0"]: {"type": "convection",
+                                              "value": T_inf,
+                                              "h": h},
+            boundary_ids["T"]["boundary_1"]: {"type": "heat_flux",
+                                              "value": neumann_bc},
+            boundary_ids["T"]["boundary_2"]: {"type": "temperature",
+                                              "value": T_expr},
+            boundary_ids["T"]["boundary_3"]: {"type": "temperature",
+                                              "value": T_expr}}
+bcs["u"] = {boundary_ids["u"]["boundary_0"]: {"type": "displacement",
+                                              "value": np.array([0, 0], dtype=PETSc.ScalarType)}}
 
 
 def get_bc_mt(mesh):
     bc_mt = {}
     bc_mt["T"] = create_mesh_tags_from_locators(
         mesh,
-        [lambda x: np.isclose(x[0], 0),
-         lambda x: np.isclose(x[0], 1),
-         lambda x: np.isclose(x[1], 0),
-         lambda x: np.isclose(x[1], 1)],
+        {boundary_ids["T"]["boundary_0"]: lambda x: np.isclose(x[0], 0),
+         boundary_ids["T"]["boundary_1"]: lambda x: np.isclose(x[0], 1),
+         boundary_ids["T"]["boundary_2"]: lambda x: np.isclose(x[1], 0),
+         boundary_ids["T"]["boundary_3"]: lambda x: np.isclose(x[1], 1)},
         mesh.topology.dim - 1)
     bc_mt["u"] = create_mesh_tags_from_locators(
         mesh,
-        [lambda x: np.logical_or(
+        {boundary_ids["u"]["boundary_0"]: lambda x: np.logical_or(
             np.logical_or(np.isclose(x[0], 0), np.isclose(x[0], 1)),
-            np.logical_or(np.isclose(x[1], 0), np.isclose(x[1], 1)))],
+            np.logical_or(np.isclose(x[1], 0), np.isclose(x[1], 1)))},
         mesh.topology.dim - 1)
     return bc_mt
 
@@ -159,9 +167,10 @@ def compute_f_u(T_expr, t_end, T_e, u_e, materials):
     # This problem has two materials for testing, but they have the same
     # properties, so can just use the first
     return - ufl.div(thermomech.sigma(
-        u_e, T_e, materials[0]["thermal_strain"][1],
-        materials[0]["thermal_strain"][0](T_e), materials[0]["E"](T_e),
-        materials[0]["nu"]))
+        u_e, T_e, materials[volume_ids["volume_0"]]["thermal_strain"][1],
+        materials[volume_ids["volume_0"]]["thermal_strain"][0](T_e),
+        materials[volume_ids["volume_0"]]["E"](T_e),
+        materials[volume_ids["volume_0"]]["nu"]))
 
 
 def test_temporal_convergence():
@@ -186,7 +195,7 @@ def test_temporal_convergence():
     for i in range(len(num_time_steps)):
         T_expr.t = 0
         f_T_expr.t = 0
-        for bc in bcs["T"]:
+        for bc in bcs["T"].values():
             if isinstance(bc["value"], TimeDependentExpression):
                 bc["value"].t = 0
         delta_t = t_end / num_time_steps[i]
@@ -230,7 +239,7 @@ def test_spatial_convergence():
 
         T_expr.t = 0
         f_T_expr.t = 0
-        for bc in bcs["T"]:
+        for bc in bcs["T"].values():
             if isinstance(bc["value"], TimeDependentExpression):
                 bc["value"].t = 0
         # TODO Use refine rather than create new mesh?
@@ -251,6 +260,3 @@ def test_spatial_convergence():
 
     assert (np.isclose(r_T, 2.0, atol=0.1))
     assert (np.isclose(r_u, 2.0, atol=0.1))
-
-
-test_spatial_convergence()

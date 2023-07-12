@@ -25,31 +25,30 @@ with XDMFFile(MPI.COMM_WORLD, "csut.xdmf", "r") as f:
     material_mt = f.read_meshtags(mesh, "materials")
 
 # Add materials
-materials = []
-materials.append(mat_dict["Copper"])
-materials.append(mat_dict["CuCrZr"])
-materials.append(mat_dict["304SS"])
-materials.append(mat_dict["304SS"])
-materials.append(mat_dict["304SS"])
+materials = {0: mat_dict["Copper"], 
+             1: mat_dict["CuCrZr"],
+             2: mat_dict["304SS"],
+             3: mat_dict["304SS"],
+             4: mat_dict["304SS"]}
 
 # Boundary conditions
 bcs = {}
-bcs["T"] = [{"type": "convection",
+bcs["T"] = {0: {"type": "convection",
              "value": lambda x: 293.15 * np.ones_like(x[0]),
              "h": lambda T: 5},
-            {"type": "heat_flux",
+            1: {"type": "heat_flux",
              "value": lambda x: 1.6e5 * np.ones_like(x[0])},
-            {"type": "heat_flux",
+            2: {"type": "heat_flux",
              "value": lambda x: 5e5 * np.ones_like(x[0])},
-            {"type": "convection",
+            3: {"type": "convection",
              "value": lambda x: 293.15 * np.ones_like(x[0]),
-             "h": mat_dict["water"]["h"]}]
-bcs["u"] = [{"type": "displacement",
+             "h": mat_dict["water"]["h"]}}
+bcs["u"] = {0: {"type": "displacement",
              "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
-            {"type": "displacement",
+            1: {"type": "displacement",
              "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
-            {"type": "pressure",
-             "value": fem.Constant(mesh, PETSc.ScalarType(-1e3))}]
+            2: {"type": "pressure",
+             "value": fem.Constant(mesh, PETSc.ScalarType(-1e3))}}
 
 # Elastic source term (not including gravity)
 f_u = fem.Constant(mesh, np.array([0, 0, 0], dtype=PETSc.ScalarType))

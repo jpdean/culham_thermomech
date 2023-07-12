@@ -404,9 +404,9 @@ def main():
     x_2 = round(n / 2) * L / n
     material_mt = create_mesh_tags_from_locators(
         mesh,
-        [lambda x: x[0] <= x_1,
-         lambda x: np.logical_and(x[0] >= x_1, x[0] <= x_2),
-         lambda x: x[0] >= x_2],
+        {0: lambda x: x[0] <= x_1,
+         1: lambda x: np.logical_and(x[0] >= x_1, x[0] <= x_2),
+         2: lambda x: x[0] >= x_2},
         mesh.topology.dim)
 
     # Specify boundary conditions
@@ -429,17 +429,17 @@ def main():
     bc_mt = {}
     bc_mt["T"] = create_mesh_tags_from_locators(
         mesh,
-        [lambda x: np.isclose(x[0], 0.0),
-         lambda x: np.logical_or(np.isclose(x[1], 0.0),
+        {0: lambda x: np.isclose(x[0], 0.0),
+         1: lambda x: np.logical_or(np.isclose(x[1], 0.0),
                                  np.isclose(x[2], 0.0)),
-         lambda x: np.logical_or(np.isclose(x[1], w),
+         2: lambda x: np.logical_or(np.isclose(x[1], w),
                                  np.isclose(x[2], w)),
-         lambda x: np.isclose(x[0], L)],
+         3: lambda x: np.isclose(x[0], L)},
         mesh.topology.dim - 1)
     bc_mt["u"] = create_mesh_tags_from_locators(
         mesh,
-        [lambda x: np.isclose(x[0], 0.0),
-         lambda x: np.isclose(x[1], w)],
+        {0: lambda x: np.isclose(x[0], 0.0),
+         1: lambda x: np.isclose(x[1], w)},
         mesh.topology.dim - 1)
 
     # Elastic source function (not including gravity)

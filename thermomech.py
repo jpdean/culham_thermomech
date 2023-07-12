@@ -393,53 +393,63 @@ def main():
         [np.array([0.0, 0.0, 0.0]),
          np.array([L, w, w])],
         [n, n, n])
+    volume_ids = {"vol_0": 2,
+                  "vol_1": 1,
+                  "vol_2": 7}
+    boundary_ids = {}
+    boundary_ids["T"] = {"boundary_0": 9,
+                         "boundary_1": 5,
+                         "boundary_2": 6,
+                         "boundary_3": 8}
+    boundary_ids["u"] = {"boundary_0": 1,
+                         "boundary_1": 0}
 
     # Materials
     from materials import materials as mat_dict
-    materials = {0: mat_dict["304SS"],
-                 1: mat_dict["Copper"],
-                 2: mat_dict["CuCrZr"]}
+    materials = {volume_ids["vol_0"]: mat_dict["304SS"],
+                 volume_ids["vol_1"]: mat_dict["Copper"],
+                 volume_ids["vol_2"]: mat_dict["CuCrZr"]}
     # Create material meshtags, making them align with mesh
     x_1 = round(n / 4) * L / n
     x_2 = round(n / 2) * L / n
     material_mt = create_mesh_tags_from_locators(
         mesh,
-        {0: lambda x: x[0] <= x_1,
-         1: lambda x: np.logical_and(x[0] >= x_1, x[0] <= x_2),
-         2: lambda x: x[0] >= x_2},
+        {volume_ids["vol_0"]: lambda x: x[0] <= x_1,
+         volume_ids["vol_1"]: lambda x: np.logical_and(x[0] >= x_1, x[0] <= x_2),
+         volume_ids["vol_2"]: lambda x: x[0] >= x_2},
         mesh.topology.dim)
 
     # Specify boundary conditions
     bcs = {}
-    bcs["T"] = {0: {"type": "temperature",
-                    "value": lambda x: 293.15 * np.ones_like(x[0])},
-                1: {"type": "convection",
-                    "value": lambda x: 293.15 * np.ones_like(x[0]),
-                    "h": lambda T: 5},
-                2: {"type": "convection",
-                    "value": lambda x: 293.15 * np.ones_like(x[0]),
-                    "h": mat_dict["water"]["h"]},
-                3: {"type": "heat_flux",
-                    "value": lambda x: 1e5 * np.ones_like(x[0])}}
-    bcs["u"] = {0: {"type": "displacement",
-                    "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
-                1: {"type": "pressure",
-                    "value": fem.Constant(mesh, PETSc.ScalarType(-1e6))}}
+    bcs["T"] = {boundary_ids["T"]["boundary_0"]: {"type": "temperature",
+                                                  "value": lambda x: 293.15 * np.ones_like(x[0])},
+                boundary_ids["T"]["boundary_1"]: {"type": "convection",
+                                                  "value": lambda x: 293.15 * np.ones_like(x[0]),
+                                                  "h": lambda T: 5},
+                boundary_ids["T"]["boundary_2"]: {"type": "convection",
+                                                  "value": lambda x: 293.15 * np.ones_like(x[0]),
+                                                  "h": mat_dict["water"]["h"]},
+                boundary_ids["T"]["boundary_3"]: {"type": "heat_flux",
+                                                  "value": lambda x: 1e5 * np.ones_like(x[0])}}
+    bcs["u"] = {boundary_ids["u"]["boundary_0"]: {"type": "displacement",
+                                                  "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
+                boundary_ids["u"]["boundary_1"]: {"type": "pressure",
+                                                  "value": fem.Constant(mesh, PETSc.ScalarType(-1e6))}}
     # Create meshtags for boundary conditions
     bc_mt = {}
     bc_mt["T"] = create_mesh_tags_from_locators(
         mesh,
-        {0: lambda x: np.isclose(x[0], 0.0),
-         1: lambda x: np.logical_or(np.isclose(x[1], 0.0),
-                                    np.isclose(x[2], 0.0)),
-         2: lambda x: np.logical_or(np.isclose(x[1], w),
-                                    np.isclose(x[2], w)),
-         3: lambda x: np.isclose(x[0], L)},
+        {boundary_ids["T"]["boundary_0"]: lambda x: np.isclose(x[0], 0.0),
+         boundary_ids["T"]["boundary_1"]: lambda x: np.logical_or(np.isclose(x[1], 0.0),
+                                                                  np.isclose(x[2], 0.0)),
+         boundary_ids["T"]["boundary_2"]: lambda x: np.logical_or(np.isclose(x[1], w),
+                                                                  np.isclose(x[2], w)),
+         boundary_ids["T"]["boundary_3"]: lambda x: np.isclose(x[0], L)},
         mesh.topology.dim - 1)
     bc_mt["u"] = create_mesh_tags_from_locators(
         mesh,
-        {0: lambda x: np.isclose(x[0], 0.0),
-         1: lambda x: np.isclose(x[1], w)},
+        {boundary_ids["u"]["boundary_0"]: lambda x: np.isclose(x[0], 0.0),
+         boundary_ids["u"]["boundary_1"]: lambda x: np.isclose(x[1], w)},
         mesh.topology.dim - 1)
 
     # Elastic source function (not including gravity)

@@ -37,7 +37,7 @@ boundary_ids["T"] = {"boundary_0": 0,
                      "boundary_3": 3}
 boundary_ids["u"] = {"boundary_0": 0,
                      "boundary_1": 1,
-                     "boundary_1": 2}
+                     "boundary_2": 2}
 
 # Add materials
 materials = {volume_ids["volume_0"]: mat_dict["Copper"],
@@ -49,22 +49,29 @@ materials = {volume_ids["volume_0"]: mat_dict["Copper"],
 
 # Boundary conditions
 bcs = {}
-bcs["T"] = {boundary_ids["T"]["boundary_0"]: {"type": "convection",
-                                              "value": lambda x: 293.15 * np.ones_like(x[0]),
-                                              "h": lambda T: 5},
-            boundary_ids["T"]["boundary_1"]: {"type": "heat_flux",
-                                              "value": lambda x: 1.6e5 * np.ones_like(x[0])},
-            boundary_ids["T"]["boundary_2"]: {"type": "heat_flux",
-                                              "value": lambda x: 5e5 * np.ones_like(x[0])},
-            boundary_ids["T"]["boundary_3"]: {"type": "convection",
-                                              "value": lambda x: 293.15 * np.ones_like(x[0]),
-                                              "h": mat_dict["water"]["h"]}}
-bcs["u"] = {boundary_ids["u"]["boundary_0"]: {"type": "displacement",
-                                              "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
-            boundary_ids["u"]["boundary_1"]: {"type": "displacement",
-                                              "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
-            boundary_ids["u"]["boundary_2"]: {"type": "pressure",
-                                              "value": fem.Constant(mesh, PETSc.ScalarType(-1e3))}}
+bcs["T"] = {boundary_ids["T"]["boundary_0"]:
+            {"type": "convection",
+             "value": lambda x: 293.15 * np.ones_like(x[0]),
+             "h": lambda T: 5},
+            boundary_ids["T"]["boundary_1"]:
+            {"type": "heat_flux",
+             "value": lambda x: 1.6e5 * np.ones_like(x[0])},
+            boundary_ids["T"]["boundary_2"]:
+            {"type": "heat_flux",
+             "value": lambda x: 5e5 * np.ones_like(x[0])},
+            boundary_ids["T"]["boundary_3"]:
+            {"type": "convection",
+             "value": lambda x: 293.15 * np.ones_like(x[0]),
+             "h": mat_dict["water"]["h"]}}
+bcs["u"] = {boundary_ids["u"]["boundary_0"]:
+            {"type": "displacement",
+             "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
+            boundary_ids["u"]["boundary_1"]:
+            {"type": "displacement",
+             "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
+            boundary_ids["u"]["boundary_2"]:
+            {"type": "pressure",
+             "value": fem.Constant(mesh, PETSc.ScalarType(-1e3))}}
 
 # Elastic source term (not including gravity)
 f_u = fem.Constant(mesh, np.array([0, 0, 0], dtype=PETSc.ScalarType))

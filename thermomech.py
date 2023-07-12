@@ -372,7 +372,7 @@ def main():
     # weak)
     n_dofs = 20000
     delta_t = 5
-    num_time_steps = 5
+    num_time_steps = 25
     # Polynomial order
     k = 1
     # Length of boxmesh
@@ -415,36 +415,47 @@ def main():
     material_mt = create_mesh_tags_from_locators(
         mesh,
         {volume_ids["vol_0"]: lambda x: x[0] <= x_1,
-         volume_ids["vol_1"]: lambda x: np.logical_and(x[0] >= x_1, x[0] <= x_2),
+         volume_ids["vol_1"]:
+         lambda x: np.logical_and(x[0] >= x_1, x[0] <= x_2),
          volume_ids["vol_2"]: lambda x: x[0] >= x_2},
         mesh.topology.dim)
 
     # Specify boundary conditions
     bcs = {}
-    bcs["T"] = {boundary_ids["T"]["boundary_0"]: {"type": "temperature",
-                                                  "value": lambda x: 293.15 * np.ones_like(x[0])},
-                boundary_ids["T"]["boundary_1"]: {"type": "convection",
-                                                  "value": lambda x: 293.15 * np.ones_like(x[0]),
-                                                  "h": lambda T: 5},
-                boundary_ids["T"]["boundary_2"]: {"type": "convection",
-                                                  "value": lambda x: 293.15 * np.ones_like(x[0]),
-                                                  "h": mat_dict["water"]["h"]},
-                boundary_ids["T"]["boundary_3"]: {"type": "heat_flux",
-                                                  "value": lambda x: 1e5 * np.ones_like(x[0])}}
-    bcs["u"] = {boundary_ids["u"]["boundary_0"]: {"type": "displacement",
-                                                  "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
-                boundary_ids["u"]["boundary_1"]: {"type": "pressure",
-                                                  "value": fem.Constant(mesh, PETSc.ScalarType(-1e6))}}
+    bcs["T"] = {boundary_ids["T"]["boundary_0"]:
+                {"type": "temperature",
+                 "value": lambda x: 293.15 * np.ones_like(x[0])},
+                boundary_ids["T"]["boundary_1"]:
+                {"type": "convection",
+                 "value": lambda x: 293.15 * np.ones_like(x[0]),
+                 "h": lambda T: 5},
+                boundary_ids["T"]["boundary_2"]:
+                {"type": "convection",
+                 "value": lambda x: 293.15 * np.ones_like(x[0]),
+                 "h": mat_dict["water"]["h"]},
+                boundary_ids["T"]["boundary_3"]:
+                {"type": "heat_flux",
+                 "value": lambda x: 1e5 * np.ones_like(x[0])}}
+    bcs["u"] = {boundary_ids["u"]["boundary_0"]:
+                {"type": "displacement",
+                 "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
+                boundary_ids["u"]["boundary_1"]:
+                {"type": "pressure",
+                 "value": fem.Constant(mesh, PETSc.ScalarType(-1e6))}}
     # Create meshtags for boundary conditions
     bc_mt = {}
     bc_mt["T"] = create_mesh_tags_from_locators(
         mesh,
-        {boundary_ids["T"]["boundary_0"]: lambda x: np.isclose(x[0], 0.0),
-         boundary_ids["T"]["boundary_1"]: lambda x: np.logical_or(np.isclose(x[1], 0.0),
-                                                                  np.isclose(x[2], 0.0)),
-         boundary_ids["T"]["boundary_2"]: lambda x: np.logical_or(np.isclose(x[1], w),
-                                                                  np.isclose(x[2], w)),
-         boundary_ids["T"]["boundary_3"]: lambda x: np.isclose(x[0], L)},
+        {boundary_ids["T"]["boundary_0"]:
+         lambda x: np.isclose(x[0], 0.0),
+         boundary_ids["T"]["boundary_1"]:
+         lambda x: np.logical_or(np.isclose(x[1], 0.0),
+                                 np.isclose(x[2], 0.0)),
+         boundary_ids["T"]["boundary_2"]:
+         lambda x: np.logical_or(np.isclose(x[1], w),
+                                 np.isclose(x[2], w)),
+         boundary_ids["T"]["boundary_3"]:
+         lambda x: np.isclose(x[0], L)},
         mesh.topology.dim - 1)
     bc_mt["u"] = create_mesh_tags_from_locators(
         mesh,

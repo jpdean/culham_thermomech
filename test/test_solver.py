@@ -70,22 +70,24 @@ boundary_ids["T"] = {"boundary_0": 9,
 boundary_ids["u"] = {"boundary_0": 1}
 
 # Create two materials (mat_1 is a numpy polynomial fit of mat_2)
-materials = {volume_ids["volume_0"]: {"name": "mat_1",
-                                      "c": c,
-                                      "rho": rho,
-                                      "kappa": kappa,
-                                      "nu": 0.33,
-                                      "E": lambda T: 1.0 + 0.1 * T**2,
-                                      "thermal_strain": (lambda T: 0.1 + 0.01 * T**3,
-                                                         1.5)},
-             volume_ids["volume_1"]: {"name": "mat_2",
-                                      "c": lambda T: 1.3 + T**2,
-                                      "rho": lambda T: 2.7 + T**2,
-                                      "kappa": lambda T: 4.1 + T**2,
-                                      "nu": 0.33,
-                                      "E": lambda T: 1.0 + 0.1 * T**2,
-                                      "thermal_strain": (lambda T: 0.1 + 0.01 * T**3,
-                                                         1.5)}}
+materials = {volume_ids["volume_0"]:
+             {"name": "mat_1",
+              "c": c,
+              "rho": rho,
+              "kappa": kappa,
+              "nu": 0.33,
+              "E": lambda T: 1.0 + 0.1 * T**2,
+              "thermal_strain": (lambda T: 0.1 + 0.01 * T**3,
+                                 1.5)},
+             volume_ids["volume_1"]:
+             {"name": "mat_2",
+              "c": lambda T: 1.3 + T**2,
+              "rho": lambda T: 2.7 + T**2,
+              "kappa": lambda T: 4.1 + T**2,
+              "nu": 0.33,
+              "E": lambda T: 1.0 + 0.1 * T**2,
+              "thermal_strain": (lambda T: 0.1 + 0.01 * T**3,
+                                 1.5)}}
 
 
 def get_material_mt(mesh):
@@ -128,17 +130,22 @@ def h(T):
 # Think of nicer way to deal with Robin bc
 # TODO Add pressure BC
 bcs = {}
-bcs["T"] = {boundary_ids["T"]["boundary_0"]: {"type": "convection",
-                                              "value": T_inf,
-                                              "h": h},
-            boundary_ids["T"]["boundary_1"]: {"type": "heat_flux",
-                                              "value": neumann_bc},
-            boundary_ids["T"]["boundary_2"]: {"type": "temperature",
-                                              "value": T_expr},
-            boundary_ids["T"]["boundary_3"]: {"type": "temperature",
-                                              "value": T_expr}}
-bcs["u"] = {boundary_ids["u"]["boundary_0"]: {"type": "displacement",
-                                              "value": np.array([0, 0], dtype=PETSc.ScalarType)}}
+bcs["T"] = {boundary_ids["T"]["boundary_0"]:
+            {"type": "convection",
+             "value": T_inf,
+             "h": h},
+            boundary_ids["T"]["boundary_1"]:
+            {"type": "heat_flux",
+             "value": neumann_bc},
+            boundary_ids["T"]["boundary_2"]:
+            {"type": "temperature",
+             "value": T_expr},
+            boundary_ids["T"]["boundary_3"]:
+            {"type": "temperature",
+             "value": T_expr}}
+bcs["u"] = {boundary_ids["u"]["boundary_0"]:
+            {"type": "displacement",
+             "value": np.array([0, 0], dtype=PETSc.ScalarType)}}
 
 
 def get_bc_mt(mesh):

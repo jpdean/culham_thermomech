@@ -134,7 +134,7 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
 
     # Loop through materials and add terms
     # NOTE This creates a new kernel for every domain marker
-    for marker, mat in enumerate(materials):
+    for marker, mat in materials.items():
         c = mat["c"](T_h)
         rho = mat["rho"](T_h)
         kappa = mat["kappa"](T_h)
@@ -396,10 +396,9 @@ def main():
 
     # Materials
     from materials import materials as mat_dict
-    materials = []
-    materials.append(mat_dict["304SS"])
-    materials.append(mat_dict["Copper"])
-    materials.append(mat_dict["CuCrZr"])
+    materials = {0: mat_dict["304SS"],
+                 1: mat_dict["Copper"],
+                 2: mat_dict["CuCrZr"]}
     # Create material meshtags, making them align with mesh
     x_1 = round(n / 4) * L / n
     x_2 = round(n / 2) * L / n
@@ -457,7 +456,8 @@ def main():
 
     # Solve the problem
     results = solve(mesh, k, delta_t, num_time_steps, T_0, f_T,
-                    f_u, g, materials, material_mt, bcs, bc_mt)
+                    f_u, g, materials, material_mt, bcs, bc_mt,
+                    write_to_file=True, steps_per_write=1)
 
     # Save timing and iteration count data to JSON
     if mesh.comm.Get_rank() == 0:

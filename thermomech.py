@@ -371,8 +371,8 @@ def main():
     # Approximate number of DOFS (total for strong scaling, per process for
     # weak)
     n_dofs = 20000
-    delta_t = 5
-    num_time_steps = 25
+    delta_t = 1
+    num_time_steps = 5
     # Polynomial order
     k = 1
     # Length of boxmesh

@@ -371,7 +371,7 @@ def main():
     # Approximate number of DOFS (total for strong scaling, per process for
     # weak)
     n_dofs = 20000
-    delta_t = 1
+    delta_t = 0.1
     num_time_steps = 5
     # Polynomial order
     k = 1

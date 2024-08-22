@@ -29,14 +29,13 @@ def build_nullspace(V):
     if tdim == 2:
         num_basis_vecs = 3
     else:
-        assert (tdim == 3)
+        assert tdim == 3
         num_basis_vecs = 6
 
     # Create vectors that will span the nullspace
     bs = V.dofmap.index_map_bs
     length0 = V.dofmap.index_map.size_local
-    basis = [la.vector(V.dofmap.index_map, bs=bs)
-             for i in range(num_basis_vecs)]
+    basis = [la.vector(V.dofmap.index_map, bs=bs) for i in range(num_basis_vecs)]
     b = [b.array for b in basis]
 
     # Get dof indices for each subspace (x, y and z dofs)
@@ -64,8 +63,7 @@ def build_nullspace(V):
     assert la.is_orthonormal(basis)
 
     basis_petsc = [
-        PETSc.Vec().createWithArray(
-            x[: bs * length0], bsize=bs, comm=V.mesh.comm)  # type: ignore
+        PETSc.Vec().createWithArray(x[: bs * length0], bsize=bs, comm=V.mesh.comm)  # type: ignore
         for x in b
     ]
     return PETSc.NullSpace().create(vectors=basis_petsc)  # type: ignore
@@ -84,9 +82,23 @@ def sigma(v, T, T_ref, alpha_L, E, nu):
     return 2.0 * mu * eps + lmbda * ufl.tr(eps) * ufl.Identity(len(v))
 
 
-def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
-          materials, material_mt, bcs, bc_mt, use_iterative_solver=True,
-          write_to_file=False, steps_per_write=10):
+def solve(
+    mesh,
+    k,
+    delta_t,
+    num_time_steps,
+    T_0,
+    f_T_expr,
+    f_u,
+    g,
+    materials,
+    material_mt,
+    bcs,
+    bc_mt,
+    use_iterative_solver=True,
+    write_to_file=False,
+    steps_per_write=10,
+):
     timing_dict = {}
     timer_solve_total = Timer("Solve Total")
     timer_initial_setup = Timer("Initial setup")
@@ -100,9 +112,10 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
     V_T = fem.functionspace(mesh, ("Lagrange", k))
     V_u = fem.functionspace(mesh, ("Lagrange", k, (mesh.geometry.dim,)))
 
-    num_dofs_global = \
-        V_T.dofmap.index_map.size_global * V_T.dofmap.index_map_bs + \
-        V_u.dofmap.index_map.size_global * V_u.dofmap.index_map_bs
+    num_dofs_global = (
+        V_T.dofmap.index_map.size_global * V_T.dofmap.index_map_bs
+        + V_u.dofmap.index_map.size_global * V_u.dofmap.index_map_bs
+    )
 
     if write_to_file:
         # FIXME Use one file
@@ -127,12 +140,12 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
     v = ufl.TestFunction(V_T)
     f_T = fem.Function(V_T)
     f_T.interpolate(f_T_expr)
-    F_T = - ufl.inner(delta_t * f_T, v) * dx
+    F_T = -ufl.inner(delta_t * f_T, v) * dx
 
     # Elastic problem
     u = ufl.TrialFunction(V_u)
     w = ufl.TestFunction(V_u)
-    F_u = - ufl.inner(f_u, w) * dx
+    F_u = -ufl.inner(f_u, w) * dx
 
     # Loop through materials and add terms
     # NOTE This creates a new kernel for every domain marker
@@ -140,22 +153,22 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
         c = mat["c"](T_h)
         rho = mat["rho"](T_h)
         kappa = mat["kappa"](T_h)
-        F_T += ufl.inner(rho * c * T_h, v) * dx(marker) + \
-            delta_t * ufl.inner(kappa * ufl.grad(T_h),
-                                ufl.grad(v)) * dx(marker) - \
-            ufl.inner(rho * c * T_n, v) * dx(marker)
+        F_T += (
+            ufl.inner(rho * c * T_h, v) * dx(marker)
+            + delta_t * ufl.inner(kappa * ufl.grad(T_h), ufl.grad(v)) * dx(marker)
+            - ufl.inner(rho * c * T_n, v) * dx(marker)
+        )
 
         (alpha_L, T_ref) = mat["thermal_strain"]
         E = mat["E"]
         nu = mat["nu"]
         F_u += ufl.inner(
-            sigma(u, T_h, T_ref, alpha_L(T_h), E(T_h), nu),
-            ufl.grad(w)) * dx(marker)
+            sigma(u, T_h, T_ref, alpha_L(T_h), E(T_h), nu), ufl.grad(w)
+        ) * dx(marker)
         # Add gravity in the direction of the last component i.e.
         # y dir in 2D, z dir in 3D
         tdim = mesh.topology.dim
-        F_u -= ufl.inner(rho * fem.Constant(mesh, g),
-                         w[tdim - 1]) * dx(marker)
+        F_u -= ufl.inner(rho * fem.Constant(mesh, g), w[tdim - 1]) * dx(marker)
 
     # Thermal boundary conditions
     # NOTE Thermal BCs could be time dependent, so keep reference to functions
@@ -172,11 +185,9 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
         bc_type = bc["type"]
         ds = ufl.Measure("ds", domain=mesh, subdomain_data=bc_mt["T"])
         if bc_type == "temperature":
-            facets = np.array(
-                bc_mt["T"].indices[bc_mt["T"].values == marker])
+            facets = np.array(bc_mt["T"].indices[bc_mt["T"].values == marker])
             dofs = fem.locate_dofs_topological(V_T, bc_mt["T"].dim, facets)
-            dirichlet_bcs_T.append(
-                fem.dirichletbc(bc_funcs_T[marker], dofs))
+            dirichlet_bcs_T.append(fem.dirichletbc(bc_funcs_T[marker], dofs))
         elif bc_type == "heat_flux":
             F_T -= delta_t * ufl.inner(bc_funcs_T[marker], v) * ds(marker)
         elif bc_type == "convection":
@@ -184,8 +195,7 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
             h = bc["h"](T_h)
             F_T += delta_t * ufl.inner(h * (T_h - T_inf), v) * ds(marker)
         else:
-            raise Exception(
-                f"Boundary condition type {bc_type} not recognised")
+            raise Exception(f"Boundary condition type {bc_type} not recognised")
 
     # Elastic boundary conditions
     dirichlet_bcs_u = []
@@ -193,24 +203,21 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
         bc_type = bc["type"]
         ds = ufl.Measure("ds", domain=mesh, subdomain_data=bc_mt["u"])
         if bc_type == "displacement":
-            facets = np.array(
-                bc_mt["u"].indices[bc_mt["u"].values == marker])
+            facets = np.array(bc_mt["u"].indices[bc_mt["u"].values == marker])
             dofs = fem.locate_dofs_topological(V_u, bc_mt["u"].dim, facets)
-            dirichlet_bcs_u.append(
-                fem.dirichletbc(bc["value"], dofs, V_u))
+            dirichlet_bcs_u.append(fem.dirichletbc(bc["value"], dofs, V_u))
         elif bc_type == "pressure":
-            F_u -= ufl.inner(bc["value"] *
-                             ufl.FacetNormal(mesh), w) * ds(marker)
+            F_u -= ufl.inner(bc["value"] * ufl.FacetNormal(mesh), w) * ds(marker)
         else:
-            raise Exception(
-                f"Boundary condition type {bc_type} not recognised")
+            raise Exception(f"Boundary condition type {bc_type} not recognised")
 
     # Create forms for elastic problem
     a_u = fem.form(ufl.lhs(F_u))
     L_u = fem.form(ufl.rhs(F_u))
 
     timing_dict["initial_setup"] = mesh.comm.allreduce(
-        timer_initial_setup.stop(), op=MPI.MAX)
+        timer_initial_setup.stop(), op=MPI.MAX
+    )
 
     # Assemble initial elastic problem
     timer_initial_elastic_assemble = Timer("Initial elastic assemble")
@@ -221,7 +228,8 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
     b_u.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
     fem.set_bc(b_u, dirichlet_bcs_u)
     timing_dict["initial_elastic_assemble"] = mesh.comm.allreduce(
-        timer_initial_elastic_assemble.stop(), op=MPI.MAX)
+        timer_initial_elastic_assemble.stop(), op=MPI.MAX
+    )
 
     # Set up solvers
     timer_solver_setup = Timer("Solver setup")
@@ -276,7 +284,8 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
         ksp_u.getPC().setType(PETSc.PC.Type.LU)
 
     timing_dict["solver_setup"] = mesh.comm.allreduce(
-        timer_solver_setup.stop(), op=MPI.MAX)
+        timer_solver_setup.stop(), op=MPI.MAX
+    )
 
     iters = {"newton": [], "T": [], "u": []}
 
@@ -286,15 +295,15 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
     timer_initial_elastic_solve = Timer("Initial elastic solve")
     ksp_u.solve(b_u, u_h.vector)
     timing_dict["initial_elastic_solve"] = mesh.comm.allreduce(
-        timer_initial_elastic_solve.stop(), op=MPI.MAX)
+        timer_initial_elastic_solve.stop(), op=MPI.MAX
+    )
     iters["u_init"] = ksp_u.its
     u_h.x.scatter_forward()
     if write_to_file:
         xdmf_file_u.write_function(u_h, t)
 
     timer_time_steping_loop = Timer("Time stepping loop")
-    timing_dict["time_steps"] = {"thermal_solve": [], "elastic_solve": [],
-                                 "total": []}
+    timing_dict["time_steps"] = {"thermal_solve": [], "elastic_solve": [], "total": []}
     timer_time_step = Timer("Time step")
     timer_thermal = Timer("Thermal solve")
     timer_elastic = Timer("Elastic solve")
@@ -317,10 +326,11 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
         timer_thermal.start()
         # ksp_T.setMonitor(monitor)
         its, converged = solver.solve(T_h)
-        timing_dict["time_steps"]["thermal_solve"].append(mesh.comm.allreduce(
-            timer_thermal.stop(), op=MPI.MAX))
+        timing_dict["time_steps"]["thermal_solve"].append(
+            mesh.comm.allreduce(timer_thermal.stop(), op=MPI.MAX)
+        )
         T_h.x.scatter_forward()
-        assert (converged)
+        assert converged
         iters["newton"].append(its)
 
         # Solve elastic problem
@@ -331,14 +341,14 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
             b_u_loc.set(0)
         fem.petsc.assemble_vector(b_u, L_u)
         fem.apply_lifting(b_u, [a_u], bcs=[dirichlet_bcs_u])
-        b_u.ghostUpdate(addv=PETSc.InsertMode.ADD,
-                        mode=PETSc.ScatterMode.REVERSE)
+        b_u.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
         fem.set_bc(b_u, dirichlet_bcs_u)
         # ksp_u.setMonitor(monitor)
         timer_elastic.start()
         ksp_u.solve(b_u, u_h.vector)
-        timing_dict["time_steps"]["elastic_solve"].append(mesh.comm.allreduce(
-            timer_elastic.stop(), op=MPI.MAX))
+        timing_dict["time_steps"]["elastic_solve"].append(
+            mesh.comm.allreduce(timer_elastic.stop(), op=MPI.MAX)
+        )
         u_h.x.scatter_forward()
 
         if write_to_file and ((n + 1) % steps_per_write == 0):
@@ -350,22 +360,27 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
         iters["T"].append(ksp_T.its)
         iters["u"].append(ksp_u.its)
 
-        timing_dict["time_steps"]["total"].append(mesh.comm.allreduce(
-            timer_time_step.stop(), op=MPI.MAX))
+        timing_dict["time_steps"]["total"].append(
+            mesh.comm.allreduce(timer_time_step.stop(), op=MPI.MAX)
+        )
 
     timing_dict["time_stepping_loop"] = mesh.comm.allreduce(
-        timer_time_steping_loop.stop(), op=MPI.MAX)
+        timer_time_steping_loop.stop(), op=MPI.MAX
+    )
 
     if write_to_file:
         xdmf_file_T.close()
         xdmf_file_u.close()
 
     timing_dict["solve_total"] = mesh.comm.allreduce(
-        timer_solve_total.stop(), op=MPI.MAX)
+        timer_solve_total.stop(), op=MPI.MAX
+    )
 
-    data = {"num_dofs_global": num_dofs_global,
-            "iters": iters,
-            "timing_dict": timing_dict}
+    data = {
+        "num_dofs_global": num_dofs_global,
+        "iters": iters,
+        "timing_dict": timing_dict,
+    }
     return {"T": T_h, "u": u_h, "data": data}
 
 
@@ -388,102 +403,133 @@ def main():
     if scaling_type == "strong":
         n_total_dofs = n_dofs
     else:
-        assert (scaling_type == "weak")
+        assert scaling_type == "weak"
         n_total_dofs = n_procs * n_dofs
-    n = round((n_total_dofs / 4)**(1 / 3) - 1)
+    n = round((n_total_dofs / 4) ** (1 / 3) - 1)
 
     mesh = create_box(
-        MPI.COMM_WORLD,
-        [np.array([0.0, 0.0, 0.0]),
-         np.array([L, w, w])],
-        [n, n, n])
+        MPI.COMM_WORLD, [np.array([0.0, 0.0, 0.0]), np.array([L, w, w])], [n, n, n]
+    )
     tdim = mesh.topology.dim
-    volume_ids = {"vol_0": 2,
-                  "vol_1": 1,
-                  "vol_2": 7}
+    volume_ids = {"vol_0": 2, "vol_1": 1, "vol_2": 7}
     boundary_ids = {}
-    boundary_ids["T"] = {"boundary_0": 9,
-                         "boundary_1": 5,
-                         "boundary_2": 6,
-                         "boundary_3": 8}
-    boundary_ids["u"] = {"boundary_0": 1,
-                         "boundary_1": 0}
+    boundary_ids["T"] = {
+        "boundary_0": 9,
+        "boundary_1": 5,
+        "boundary_2": 6,
+        "boundary_3": 8,
+    }
+    boundary_ids["u"] = {"boundary_0": 1, "boundary_1": 0}
 
     # Materials
     from materials import materials as mat_dict
-    materials = {volume_ids["vol_0"]: mat_dict["304SS"],
-                 volume_ids["vol_1"]: mat_dict["Copper"],
-                 volume_ids["vol_2"]: mat_dict["CuCrZr"]}
+
+    materials = {
+        volume_ids["vol_0"]: mat_dict["304SS"],
+        volume_ids["vol_1"]: mat_dict["Copper"],
+        volume_ids["vol_2"]: mat_dict["CuCrZr"],
+    }
     # Create material meshtags, making them align with mesh
     x_1 = round(n / 4) * L / n
     x_2 = round(n / 2) * L / n
     material_mt = create_mesh_tags_from_locators(
         mesh,
-        {volume_ids["vol_0"]: lambda x: x[0] <= x_1,
-         volume_ids["vol_1"]:
-         lambda x: np.logical_and(x[0] >= x_1, x[0] <= x_2),
-         volume_ids["vol_2"]: lambda x: x[0] >= x_2},
-        tdim)
+        {
+            volume_ids["vol_0"]: lambda x: x[0] <= x_1,
+            volume_ids["vol_1"]: lambda x: np.logical_and(x[0] >= x_1, x[0] <= x_2),
+            volume_ids["vol_2"]: lambda x: x[0] >= x_2,
+        },
+        tdim,
+    )
 
     # Specify boundary conditions
     bcs = {}
-    bcs["T"] = {boundary_ids["T"]["boundary_0"]:
-                {"type": "temperature",
-                 "value": lambda x: 293.15 * np.ones_like(x[0])},
-                boundary_ids["T"]["boundary_1"]:
-                {"type": "convection",
-                 "value": lambda x: 293.15 * np.ones_like(x[0]),
-                 "h": lambda T: 5},
-                boundary_ids["T"]["boundary_2"]:
-                {"type": "convection",
-                 "value": lambda x: 293.15 * np.ones_like(x[0]),
-                 "h": mat_dict["water"]["h"]},
-                boundary_ids["T"]["boundary_3"]:
-                {"type": "heat_flux",
-                 "value": lambda x: 1e5 * np.ones_like(x[0])}}
-    bcs["u"] = {boundary_ids["u"]["boundary_0"]:
-                {"type": "displacement",
-                 "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
-                boundary_ids["u"]["boundary_1"]:
-                {"type": "pressure",
-                 "value": fem.Constant(mesh, PETSc.ScalarType(-1e6))}}
+    bcs["T"] = {
+        boundary_ids["T"]["boundary_0"]: {
+            "type": "temperature",
+            "value": lambda x: 293.15 * np.ones_like(x[0]),
+        },
+        boundary_ids["T"]["boundary_1"]: {
+            "type": "convection",
+            "value": lambda x: 293.15 * np.ones_like(x[0]),
+            "h": lambda T: 5,
+        },
+        boundary_ids["T"]["boundary_2"]: {
+            "type": "convection",
+            "value": lambda x: 293.15 * np.ones_like(x[0]),
+            "h": mat_dict["water"]["h"],
+        },
+        boundary_ids["T"]["boundary_3"]: {
+            "type": "heat_flux",
+            "value": lambda x: 1e5 * np.ones_like(x[0]),
+        },
+    }
+    bcs["u"] = {
+        boundary_ids["u"]["boundary_0"]: {
+            "type": "displacement",
+            "value": np.array([0, 0, 0], dtype=PETSc.ScalarType),
+        },
+        boundary_ids["u"]["boundary_1"]: {
+            "type": "pressure",
+            "value": fem.Constant(mesh, PETSc.ScalarType(-1e6)),
+        },
+    }
     # Create meshtags for boundary conditions
     bc_mt = {}
     bc_mt["T"] = create_mesh_tags_from_locators(
         mesh,
-        {boundary_ids["T"]["boundary_0"]:
-         lambda x: np.isclose(x[0], 0.0),
-         boundary_ids["T"]["boundary_1"]:
-         lambda x: np.logical_or(np.isclose(x[1], 0.0),
-                                 np.isclose(x[2], 0.0)),
-         boundary_ids["T"]["boundary_2"]:
-         lambda x: np.logical_or(np.isclose(x[1], w),
-                                 np.isclose(x[2], w)),
-         boundary_ids["T"]["boundary_3"]:
-         lambda x: np.isclose(x[0], L)},
-        tdim - 1)
+        {
+            boundary_ids["T"]["boundary_0"]: lambda x: np.isclose(x[0], 0.0),
+            boundary_ids["T"]["boundary_1"]: lambda x: np.logical_or(
+                np.isclose(x[1], 0.0), np.isclose(x[2], 0.0)
+            ),
+            boundary_ids["T"]["boundary_2"]: lambda x: np.logical_or(
+                np.isclose(x[1], w), np.isclose(x[2], w)
+            ),
+            boundary_ids["T"]["boundary_3"]: lambda x: np.isclose(x[0], L),
+        },
+        tdim - 1,
+    )
     bc_mt["u"] = create_mesh_tags_from_locators(
         mesh,
-        {boundary_ids["u"]["boundary_0"]: lambda x: np.isclose(x[0], 0.0),
-         boundary_ids["u"]["boundary_1"]: lambda x: np.isclose(x[1], w)},
-        tdim - 1)
+        {
+            boundary_ids["u"]["boundary_0"]: lambda x: np.isclose(x[0], 0.0),
+            boundary_ids["u"]["boundary_1"]: lambda x: np.isclose(x[1], w),
+        },
+        tdim - 1,
+    )
 
     # Elastic source function (not including gravity)
     f_u = fem.Constant(mesh, np.array([0, 0, 0], dtype=PETSc.ScalarType))
 
     # Thermal source function
-    def f_T(x): return np.zeros_like(x[0])
+    def f_T(x):
+        return np.zeros_like(x[0])
 
     # Initial temperature
-    def T_0(x): return 293.15 * np.ones_like(x[0])
+    def T_0(x):
+        return 293.15 * np.ones_like(x[0])
 
     # Acceleration due to gravity
-    g = PETSc.ScalarType(- 9.81)
+    g = PETSc.ScalarType(-9.81)
 
     # Solve the problem
-    results = solve(mesh, k, delta_t, num_time_steps, T_0, f_T,
-                    f_u, g, materials, material_mt, bcs, bc_mt,
-                    write_to_file=True, steps_per_write=1)
+    results = solve(
+        mesh,
+        k,
+        delta_t,
+        num_time_steps,
+        T_0,
+        f_T,
+        f_u,
+        g,
+        materials,
+        material_mt,
+        bcs,
+        bc_mt,
+        write_to_file=True,
+        steps_per_write=1,
+    )
 
     # Save timing and iteration count data to JSON
     if mesh.comm.Get_rank() == 0:

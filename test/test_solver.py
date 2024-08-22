@@ -190,7 +190,7 @@ def test_temporal_convergence():
     bc_mt = get_bc_mt(mesh)
 
     errors_L2 = {"T": [], "u": []}
-    V_e = fem.FunctionSpace(mesh, ("Lagrange", k + 3))
+    V_e = fem.functionspace(mesh, ("Lagrange", k + 3))
     T_e = fem.Function(V_e)
 
     x = ufl.SpatialCoordinate(mesh)
@@ -236,7 +236,7 @@ def test_spatial_convergence():
         mesh = create_unit_square(MPI.COMM_WORLD, ns[i], ns[i])
 
         T_expr.t = t_end
-        V_e = fem.FunctionSpace(mesh, ("Lagrange", k + 3))
+        V_e = fem.functionspace(mesh, ("Lagrange", k + 3))
         T_e = fem.Function(V_e)
         T_e.interpolate(T_expr)
 

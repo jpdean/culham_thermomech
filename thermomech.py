@@ -15,8 +15,6 @@ import ufl
 
 from utils import TimeDependentExpression, create_mesh_tags_from_locators
 
-from contextlib import ExitStack
-
 import json
 
 
@@ -25,48 +23,50 @@ def monitor(ksp, its, rnorm):
 
 
 def build_nullspace(V):
-    """Function to build PETSc nullspace for 2D and 3D elasticity"""
+    """Build PETSc nullspace for 2D and 3D elasticity"""
 
-    d = V.mesh.topology.dim
-
-    # Create list of vectors for null space
-    index_map = V.dofmap.index_map
-    bs = V.dofmap.index_map_bs
-    if d == 2:
+    tdim = V.mesh.topology.dim
+    if tdim == 2:
         num_basis_vecs = 3
     else:
-        assert (d == 3)
+        assert (tdim == 3)
         num_basis_vecs = 6
-    ns = [la.create_petsc_vector(index_map, bs) for i in range(num_basis_vecs)]
-    with ExitStack() as stack:
-        vec_local = [stack.enter_context(x.localForm()) for x in ns]
-        basis = [np.asarray(x) for x in vec_local]
 
-        # Get dof indices for each subspace
-        dofs = [V.sub(i).dofmap.list.flatten() for i in range(d)]
+    # Create vectors that will span the nullspace
+    bs = V.dofmap.index_map_bs
+    length0 = V.dofmap.index_map.size_local
+    basis = [la.vector(V.dofmap.index_map, bs=bs) for i in range(num_basis_vecs)]
+    b = [b.array for b in basis]
 
-        # Build translational nullspace basis
-        for i in range(d):
-            basis[i][dofs[i]] = 1.0
+    # Get dof indices for each subspace (x, y and z dofs)
+    dofs = [V.sub(i).dofmap.list.flatten() for i in range(tdim)]
 
-        # Build rotational nullspace basis
-        x = V.tabulate_dof_coordinates()
-        dofs_block = V.dofmap.list.flatten()
-        x0 = x[dofs_block, 0]
-        x1 = x[dofs_block, 1]
-        basis[d][dofs[0]] = -x1
-        basis[d][dofs[1]] = x0
+    # Set the three translational rigid body modes
+    for i in range(tdim):
+        b[i][dofs[i]] = 1.0
 
-        if d == 3:
-            x2 = x[dofs_block, 2]
-            basis[d + 1][dofs[0]] = x2
-            basis[d + 1][dofs[2]] = -x0
-            basis[d + 2][dofs[2]] = x1
-            basis[d + 2][dofs[1]] = -x2
+    # Set the three rotational rigid body modes
+    x = V.tabulate_dof_coordinates()
+    dofs_block = V.dofmap.list.flatten()
+    x0, x1 = x[dofs_block, 0], x[dofs_block, 1]
+    b[tdim][dofs[0]] = -x1
+    b[tdim][dofs[1]] = x0
 
-    la.orthonormalize(ns)
-    assert la.is_orthonormal(ns)
-    return PETSc.NullSpace().create(vectors=ns)
+    if tdim == 3:
+        x2 = x[dofs_block, 2]
+        b[4][dofs[0]] = x2
+        b[4][dofs[2]] = -x0
+        b[5][dofs[2]] = x1
+        b[5][dofs[1]] = -x2
+
+    la.orthonormalize(basis)
+    assert la.is_orthonormal(basis)
+
+    basis_petsc = [
+        PETSc.Vec().createWithArray(x[: bs * length0], bsize=bs, comm=V.mesh.comm)  # type: ignore
+        for x in b
+    ]
+    return PETSc.NullSpace().create(vectors=basis_petsc)  # type: ignore
 
 
 def sigma(v, T, T_ref, alpha_L, E, nu):
@@ -95,8 +95,8 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
     delta_t = fem.Constant(mesh, PETSc.ScalarType(delta_t))
 
     # Thermal and elastic function spaces
-    V_T = fem.FunctionSpace(mesh, ("Lagrange", k))
-    V_u = fem.VectorFunctionSpace(mesh, ("Lagrange", k))
+    V_T = fem.functionspace(mesh, ("Lagrange", k))
+    V_u = fem.functionspace(mesh, ("Lagrange", k, (mesh.geometry.dim,)))
 
     num_dofs_global = \
         V_T.dofmap.index_map.size_global * V_T.dofmap.index_map_bs + \
@@ -151,8 +151,9 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
             ufl.grad(w)) * dx(marker)
         # Add gravity in the direction of the last component i.e.
         # y dir in 2D, z dir in 3D
+        tdim = mesh.topology.dim
         F_u -= ufl.inner(rho * fem.Constant(mesh, g),
-                         w[mesh.topology.dim - 1]) * dx(marker)
+                         w[tdim - 1]) * dx(marker)
 
     # Thermal boundary conditions
     # NOTE Thermal BCs could be time dependent, so keep reference to functions
@@ -163,6 +164,7 @@ def solve(mesh, k, delta_t, num_time_steps, T_0, f_T_expr, f_u, g,
         bc_funcs_T[marker] = func
 
     dirichlet_bcs_T = []
+    mesh.topology.create_connectivity(tdim - 1, tdim)
     # FIXME Make types enums
     for marker, bc in bcs["T"].items():
         bc_type = bc["type"]
@@ -393,6 +395,7 @@ def main():
         [np.array([0.0, 0.0, 0.0]),
          np.array([L, w, w])],
         [n, n, n])
+    tdim = mesh.topology.dim
     volume_ids = {"vol_0": 2,
                   "vol_1": 1,
                   "vol_2": 7}
@@ -418,7 +421,7 @@ def main():
          volume_ids["vol_1"]:
          lambda x: np.logical_and(x[0] >= x_1, x[0] <= x_2),
          volume_ids["vol_2"]: lambda x: x[0] >= x_2},
-        mesh.topology.dim)
+        tdim)
 
     # Specify boundary conditions
     bcs = {}
@@ -456,12 +459,12 @@ def main():
                                  np.isclose(x[2], w)),
          boundary_ids["T"]["boundary_3"]:
          lambda x: np.isclose(x[0], L)},
-        mesh.topology.dim - 1)
+        tdim - 1)
     bc_mt["u"] = create_mesh_tags_from_locators(
         mesh,
         {boundary_ids["u"]["boundary_0"]: lambda x: np.isclose(x[0], 0.0),
          boundary_ids["u"]["boundary_1"]: lambda x: np.isclose(x[1], w)},
-        mesh.topology.dim - 1)
+        tdim - 1)
 
     # Elastic source function (not including gravity)
     f_u = fem.Constant(mesh, np.array([0, 0, 0], dtype=PETSc.ScalarType))

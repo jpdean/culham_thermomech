@@ -34,7 +34,9 @@ jobs:
 
       # Runs a single command using the runners shell
       - name: Run unit tests in serial
-        run: pytest .
+        run: |
+          python3 -m pip install pytest
+          pytest .
 
       - name: Run unit tests in parallel
         run: mpirun -np 2 python3 -m pytest .

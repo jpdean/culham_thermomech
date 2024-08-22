@@ -35,7 +35,8 @@ def build_nullspace(V):
     # Create vectors that will span the nullspace
     bs = V.dofmap.index_map_bs
     length0 = V.dofmap.index_map.size_local
-    basis = [la.vector(V.dofmap.index_map, bs=bs) for i in range(num_basis_vecs)]
+    basis = [la.vector(V.dofmap.index_map, bs=bs)
+             for i in range(num_basis_vecs)]
     b = [b.array for b in basis]
 
     # Get dof indices for each subspace (x, y and z dofs)
@@ -63,7 +64,8 @@ def build_nullspace(V):
     assert la.is_orthonormal(basis)
 
     basis_petsc = [
-        PETSc.Vec().createWithArray(x[: bs * length0], bsize=bs, comm=V.mesh.comm)  # type: ignore
+        PETSc.Vec().createWithArray(
+            x[: bs * length0], bsize=bs, comm=V.mesh.comm)  # type: ignore
         for x in b
     ]
     return PETSc.NullSpace().create(vectors=basis_petsc)  # type: ignore

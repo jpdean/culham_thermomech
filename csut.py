@@ -25,73 +25,92 @@ with XDMFFile(MPI.COMM_WORLD, "csut.xdmf", "r") as f:
     material_mt = f.read_meshtags(mesh, "materials")
 
 # TODO Give meaningful volume and boundary names
-volume_ids = {"volume_0": 0,
-              "volume_1": 1,
-              "volume_2": 2,
-              "volume_3": 3,
-              "volume_4": 4}
+volume_ids = {"volume_0": 0, "volume_1": 1, "volume_2": 2, "volume_3": 3, "volume_4": 4}
 boundary_ids = {}
-boundary_ids["T"] = {"boundary_0": 0,
-                     "boundary_1": 1,
-                     "boundary_2": 2,
-                     "boundary_3": 3}
-boundary_ids["u"] = {"boundary_0": 0,
-                     "boundary_1": 1,
-                     "boundary_2": 2}
+boundary_ids["T"] = {"boundary_0": 0, "boundary_1": 1, "boundary_2": 2, "boundary_3": 3}
+boundary_ids["u"] = {"boundary_0": 0, "boundary_1": 1, "boundary_2": 2}
 
 # Add materials
-materials = {volume_ids["volume_0"]: mat_dict["Copper"],
-             volume_ids["volume_1"]: mat_dict["CuCrZr"],
-             volume_ids["volume_2"]: mat_dict["304SS"],
-             volume_ids["volume_3"]: mat_dict["304SS"],
-             volume_ids["volume_4"]: mat_dict["304SS"]}
+materials = {
+    volume_ids["volume_0"]: mat_dict["Copper"],
+    volume_ids["volume_1"]: mat_dict["CuCrZr"],
+    volume_ids["volume_2"]: mat_dict["304SS"],
+    volume_ids["volume_3"]: mat_dict["304SS"],
+    volume_ids["volume_4"]: mat_dict["304SS"],
+}
 
 
 # Boundary conditions
 bcs = {}
-bcs["T"] = {boundary_ids["T"]["boundary_0"]:
-            {"type": "convection",
-             "value": lambda x: 293.15 * np.ones_like(x[0]),
-             "h": lambda T: 5},
-            boundary_ids["T"]["boundary_1"]:
-            {"type": "heat_flux",
-             "value": lambda x: 1.6e5 * np.ones_like(x[0])},
-            boundary_ids["T"]["boundary_2"]:
-            {"type": "heat_flux",
-             "value": lambda x: 5e5 * np.ones_like(x[0])},
-            boundary_ids["T"]["boundary_3"]:
-            {"type": "convection",
-             "value": lambda x: 293.15 * np.ones_like(x[0]),
-             "h": mat_dict["water"]["h"]}}
-bcs["u"] = {boundary_ids["u"]["boundary_0"]:
-            {"type": "displacement",
-             "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
-            boundary_ids["u"]["boundary_1"]:
-            {"type": "displacement",
-             "value": np.array([0, 0, 0], dtype=PETSc.ScalarType)},
-            boundary_ids["u"]["boundary_2"]:
-            {"type": "pressure",
-             "value": fem.Constant(mesh, PETSc.ScalarType(-1e3))}}
+bcs["T"] = {
+    boundary_ids["T"]["boundary_0"]: {
+        "type": "convection",
+        "value": lambda x: 293.15 * np.ones_like(x[0]),
+        "h": lambda T: 5,
+    },
+    boundary_ids["T"]["boundary_1"]: {
+        "type": "heat_flux",
+        "value": lambda x: 1.6e5 * np.ones_like(x[0]),
+    },
+    boundary_ids["T"]["boundary_2"]: {
+        "type": "heat_flux",
+        "value": lambda x: 5e5 * np.ones_like(x[0]),
+    },
+    boundary_ids["T"]["boundary_3"]: {
+        "type": "convection",
+        "value": lambda x: 293.15 * np.ones_like(x[0]),
+        "h": mat_dict["water"]["h"],
+    },
+}
+bcs["u"] = {
+    boundary_ids["u"]["boundary_0"]: {
+        "type": "displacement",
+        "value": np.array([0, 0, 0], dtype=PETSc.ScalarType),
+    },
+    boundary_ids["u"]["boundary_1"]: {
+        "type": "displacement",
+        "value": np.array([0, 0, 0], dtype=PETSc.ScalarType),
+    },
+    boundary_ids["u"]["boundary_2"]: {
+        "type": "pressure",
+        "value": fem.Constant(mesh, PETSc.ScalarType(-1e3)),
+    },
+}
 
 # Elastic source term (not including gravity)
 f_u = fem.Constant(mesh, np.array([0, 0, 0], dtype=PETSc.ScalarType))
 
 
 # Thermal source term
-def f_T(x): return np.zeros_like(x[0])
+def f_T(x):
+    return np.zeros_like(x[0])
 
 
 # Initial temperature
-def T_0(x): return 293.15 * np.ones_like(x[0])
+def T_0(x):
+    return 293.15 * np.ones_like(x[0])
 
 
 # Acceleration due to gravity
-g = PETSc.ScalarType(- 9.81)
+g = PETSc.ScalarType(-9.81)
 
 # Solve the problem
-results = solve(mesh, k, delta_t, num_time_steps, T_0, f_T,
-                f_u, g, materials, material_mt, bcs, bc_mt,
-                write_to_file=write_to_file, steps_per_write=steps_per_write)
+results = solve(
+    mesh,
+    k,
+    delta_t,
+    num_time_steps,
+    T_0,
+    f_T,
+    f_u,
+    g,
+    materials,
+    material_mt,
+    bcs,
+    bc_mt,
+    write_to_file=write_to_file,
+    steps_per_write=steps_per_write,
+)
 
 # Write timing and iteration data to file
 n_procs = MPI.COMM_WORLD.Get_size()

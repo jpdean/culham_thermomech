@@ -22,9 +22,7 @@ def ufl_linear_interp(xs, ys, u):
 
     interp = ufl.conditional(conditions[1], pieces[1], pieces[0])
     for i in range(1, len(conditions) - 1):
-        interp = ufl.conditional(conditions[i + 1],
-                                 pieces[i + 1],
-                                 interp)
+        interp = ufl.conditional(conditions[i + 1], pieces[i + 1], interp)
     return interp
 
 
@@ -51,15 +49,16 @@ def create_mesh_tags_from_locators(mesh, locators, edim):
         entity_markers.append(np.full(len(entities), marker))
     entity_indices = np.array(np.hstack(entity_indices), dtype=np.int32)
     # Check no entities are duplicated
-    assert (len(np.unique(entity_indices)) == len(entity_indices))
+    assert len(np.unique(entity_indices)) == len(entity_indices)
     entity_markers = np.array(np.hstack(entity_markers), dtype=np.int32)
     sorted_entities = np.argsort(entity_indices)
-    mt = meshtags(mesh, edim, entity_indices[sorted_entities],
-                  entity_markers[sorted_entities])
+    mt = meshtags(
+        mesh, edim, entity_indices[sorted_entities], entity_markers[sorted_entities]
+    )
     return mt
 
 
-class TimeDependentExpression():
+class TimeDependentExpression:
     """Simple class to represent time dependent functions"""
 
     def __init__(self, expression):
@@ -72,10 +71,12 @@ class TimeDependentExpression():
 
 def compute_error_L2_norm(comm, v_h, v):
     """Compute the L2-norm of the difference between v and v_h"""
-    return np.sqrt(comm.allreduce(
-        fem.assemble_scalar(fem.form((v_h - v)**2 * ufl.dx)), op=MPI.SUM))
+    return np.sqrt(
+        comm.allreduce(
+            fem.assemble_scalar(fem.form((v_h - v) ** 2 * ufl.dx)), op=MPI.SUM
+        )
+    )
 
 
 def compute_convergence_rate(errors_L2, ns):
-    return np.log(errors_L2[-1] / errors_L2[-2]) / \
-        np.log(ns[-2] / ns[-1])
+    return np.log(errors_L2[-1] / errors_L2[-2]) / np.log(ns[-2] / ns[-1])

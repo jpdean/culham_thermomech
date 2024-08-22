@@ -4,13 +4,15 @@ from sympy import sin, cos, pi, simplify
 
 
 def sympy_to_code(sympy_func):
-    replacement_strings = (("pi", "np.pi"),
-                           ("sin", "np.sin"),
-                           ("cos", "np.cos"),
-                           ("R.x", "x[0]"),
-                           ("R.y", "x[1]"),
-                           ("t", "self.t"),
-                           ("*", " * "))
+    replacement_strings = (
+        ("pi", "np.pi"),
+        ("sin", "np.sin"),
+        ("cos", "np.cos"),
+        ("R.x", "x[0]"),
+        ("R.y", "x[1]"),
+        ("t", "self.t"),
+        ("*", " * "),
+    )
     code = str(sympy_func)
     for s in replacement_strings:
         code = code.replace(s[0], s[1])
@@ -43,6 +45,6 @@ kappa_dT_dn_right_code = sympy_to_code(kappa_dT_dn_right)
 print(f"\ndT_dn_right = {kappa_dT_dn_right_code}")
 
 # Solve for T_inf on top boundary
-T_inf_left = simplify(T + 1 / h * kappa_grad_T.dot(- R.i))
+T_inf_left = simplify(T + 1 / h * kappa_grad_T.dot(-R.i))
 T_inf_left_code = sympy_to_code(T_inf_left)
 print(f"\nT_inf_left = {T_inf_left_code}")
